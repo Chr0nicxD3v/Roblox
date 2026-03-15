@@ -61,30 +61,23 @@ local MakeTweenInfo = TweenInfo.new
 
 -- ─────────────────────────────────────────────────────────────────
 --  RESPONSIVE SCALE
---  The window is authored at 560 × 340.
---  On any screen we leave a 24px margin on each side, so the window
---  may use at most (viewport - 48) px wide and (viewport - 48) px tall.
---  Scale is the largest value that keeps BOTH dimensions within that
---  budget.  Upper cap of 1.15 prevents it ballooning on 4K monitors.
---  No lower floor — the window shrinks as far as needed so it always
---  fits without horizontal scrolling on any device.
+--  Design target: 560 × 340 at a 1280 × 720 viewport.
+--  Everything is authored at 1× then multiplied by UI_SCALE.
 -- ─────────────────────────────────────────────────────────────────
-local WIN_W   = 560   -- authored window width
-local WIN_H   = 340   -- authored window height
-local SB_W    = 158   -- sidebar width
+local BASE_W, BASE_H = 1280, 720
+local WIN_W, WIN_H = 560, 340 -- authored window size
+local SB_W = 158 -- sidebar width
 local CONTENT_X = 166 -- content area left offset
-local ELEM_W  = 378   -- element / section width
-local HDR_H   = 32    -- header height
-local SB_H    = 308   -- sidebar height
+local ELEM_W = 378 -- element / section width
+local HDR_H = 32 -- header height
+local SB_H = 308 -- sidebar / content height
 local CONTENT_H = 296 -- scrollable content height
-
-local MARGIN  = 24    -- px gap kept on each side of the screen
 
 local function getScale()
 	local vp = Camera.ViewportSize
-	local maxW = (vp.X - MARGIN * 2) / WIN_W
-	local maxH = (vp.Y - MARGIN * 2) / WIN_H
-	return math.clamp(math.min(maxW, maxH), 0.28, 1.15)
+	-- Clamp: never shrink below 0.45 (tiny phones) or above 1.15 (4K)
+	local s = math.min(vp.X / BASE_W, vp.Y / BASE_H)
+	return math.clamp(s, 0.45, 1.15)
 end
 
 local function scaled(n)
@@ -433,8 +426,7 @@ end
 -- Returns the current cursor/touch screen position as x, y.
 -- Falls back to button centre when touch position is unavailable.
 local function inputPos(button)
-	local touches = UserInputService:GetTouchEnabled()
-		and UserInputService:GetTouches()
+	local touches = UserInputService:GetTouchEnabled() and UserInputService:GetTouches()
 	if touches and #touches > 0 then
 		return touches[1].Position.X, touches[1].Position.Y
 	end
@@ -563,14 +555,30 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 
 	-- ── Responsive sizing ─────────────────────────────────────────
 	-- Recalculated whenever the viewport changes (orientation flip, etc.)
-	local function winW()  return scaled(WIN_W)  end
-	local function winH()  return scaled(WIN_H)  end
-	local function hdrH()  return scaled(HDR_H)  end
-	local function sbW()   return scaled(SB_W)   end
-	local function sbH()   return scaled(SB_H)   end
-	local function cntX()  return scaled(CONTENT_X)  end
-	local function cntH()  return scaled(CONTENT_H)  end
-	local function elemW() return scaled(ELEM_W) end
+	local function winW()
+		return scaled(WIN_W)
+	end
+	local function winH()
+		return scaled(WIN_H)
+	end
+	local function hdrH()
+		return scaled(HDR_H)
+	end
+	local function sbW()
+		return scaled(SB_W)
+	end
+	local function sbH()
+		return scaled(SB_H)
+	end
+	local function cntX()
+		return scaled(CONTENT_X)
+	end
+	local function cntH()
+		return scaled(CONTENT_H)
+	end
+	local function elemW()
+		return scaled(ELEM_W)
+	end
 
 	-- ── Main window ───────────────────────────────────────────────
 	local Main = New("Frame", {
@@ -1124,7 +1132,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						return
 					end
 					Tween(Row, { BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor }, 0.12)
-					local _rx, _ry = inputPos(Row); Ripple(Row, Rip, _rx, _ry)
+					local _rx, _ry = inputPos(Row)
+					Ripple(Row, Rip, _rx, _ry)
 					task.spawn(pcall, callback)
 				end))
 				Track(InfoBtn.MouseButton1Click:Connect(function()
@@ -1174,7 +1183,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local Dot = New("Frame", {
 					Parent = Pill,
 					BackgroundColor3 = activeTheme.TextColor,
-					Position = toggled and UDim2.new(1, -scaled(18), 0.5, -scaled(6)) or UDim2.new(0, scaled(2), 0.5, -scaled(6)),
+					Position = toggled and UDim2.new(1, -scaled(18), 0.5, -scaled(6))
+						or UDim2.new(0, scaled(2), 0.5, -scaled(6)),
 					Size = UDim2.fromOffset(scaled(12), scaled(12)),
 				})
 				New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = Dot })
@@ -1182,7 +1192,14 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local function syncVisual(state, animate)
 					local t = animate ~= false and 0.15 or 0
 					Tween(Pill, { BackgroundColor3 = state and activeTheme.SchemeColor or derived.SliderTrack }, t)
-					Tween(Dot, { Position = state and UDim2.new(1, -scaled(18), 0.5, -scaled(6)) or UDim2.new(0, scaled(2), 0.5, -scaled(6)) }, t)
+					Tween(
+						Dot,
+						{
+							Position = state and UDim2.new(1, -scaled(18), 0.5, -scaled(6))
+								or UDim2.new(0, scaled(2), 0.5, -scaled(6)),
+						},
+						t
+					)
 				end
 
 				Chr0nicxHack3r:OnThemeChange(function()
@@ -1213,7 +1230,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					end
 					toggled = not toggled
 					syncVisual(toggled)
-					local _rx, _ry = inputPos(Row); Ripple(Row, Rip, _rx, _ry)
+					local _rx, _ry = inputPos(Row)
+					Ripple(Row, Rip, _rx, _ry)
 					SettingsT[tName] = toggled
 					if Chr0nicxHack3r.OnConfigChanged then
 						pcall(Chr0nicxHack3r.OnConfigChanged, tName, toggled, SettingsT)
@@ -1346,16 +1364,20 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 
 				-- Shared logic: begin a slider drag from a screen X position
 				local function beginSliderDrag(screenX, screenY)
-					if focusing then return end
+					if focusing then
+						return
+					end
 					dragging = true
 					Tween(Thumb, { Size = UDim2.fromOffset(scaled(13), scaled(13)) }, 0.1)
 					Ripple(Row, Rip, screenX, screenY)
 					setVal(
-						minVal + (maxVal - minVal)
-							* math.clamp(
-								(screenX - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
-								0, 1
-							),
+						minVal
+							+ (maxVal - minVal)
+								* math.clamp(
+									(screenX - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
+									0,
+									1
+								),
 						true
 					)
 				end
@@ -1370,7 +1392,9 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				end))
 
 				Track(UserInputService.InputChanged:Connect(function(inp)
-					if not dragging then return end
+					if not dragging then
+						return
+					end
 					local t = inp.UserInputType
 					local sx
 					if t == Enum.UserInputType.MouseMovement then
@@ -1380,11 +1404,13 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					end
 					if sx then
 						setVal(
-							minVal + (maxVal - minVal)
-								* math.clamp(
-									(sx - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
-									0, 1
-								),
+							minVal
+								+ (maxVal - minVal)
+									* math.clamp(
+										(sx - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
+										0,
+										1
+									),
 							true
 						)
 					end
@@ -1597,7 +1623,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						return
 					end
 					setOpen(not opened)
-					local _rx, _ry = inputPos(DDBtn); Ripple(DDBtn, Rip, _rx, _ry)
+					local _rx, _ry = inputPos(DDBtn)
+					Ripple(DDBtn, Rip, _rx, _ry)
 				end))
 				Track(InfoBtn.MouseButton1Click:Connect(function()
 					task.spawn(showTooltip, Tooltip)
@@ -1646,7 +1673,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 							return
 						end
 						SelLbl.Text = tostring(v)
-						local _rx, _ry = inputPos(Opt); Ripple(Opt, OR, _rx, _ry)
+						local _rx, _ry = inputPos(Opt)
+						Ripple(Opt, OR, _rx, _ry)
 						task.spawn(pcall, callback, v)
 						setOpen(false)
 					end))
@@ -1669,7 +1697,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					end
 					DDCont:TweenSize(
 						UDim2.fromOffset(elemW(), opened and DDLayout.AbsoluteContentSize.Y or scaled(34)),
-						"Out", "Quad", 0.2, true
+						"Out",
+						"Quad",
+						0.2,
+						true
 					)
 					task.wait(0.22)
 					resizeSection()
@@ -1760,7 +1791,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					end
 					waiting = true
 					KeyTag.Text = ". . ."
-					local _rx, _ry = inputPos(Row); Ripple(Row, Rip, _rx, _ry)
+					local _rx, _ry = inputPos(Row)
+					Ripple(Row, Rip, _rx, _ry)
 					local conn
 					conn = Track(UserInputService.InputBegan:Connect(function(inp)
 						if not waiting then
@@ -1859,16 +1891,19 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					ZIndex = 3,
 				})
 				New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = Swatch })
-				New("UIStroke", { Parent = Swatch, Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Transparency = 0.7 })
+				New(
+					"UIStroke",
+					{ Parent = Swatch, Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Transparency = 0.7 }
+				)
 
 				-- Panel proportions: picker = 59% of width, darkbar = ~5%, rainbow side = ~31%
 				-- Authored at 378px: Picker=222 @ x=8, DkBar=20 @ x=238, side @ x=262
-				local panH  = scaled(112)
-				local picW  = scaled(222)
-				local picX  = scaled(8)
-				local picH  = scaled(88)
-				local dkW   = scaled(20)
-				local dkX   = scaled(238)
+				local panH = scaled(112)
+				local picW = scaled(222)
+				local picX = scaled(8)
+				local picH = scaled(88)
+				local dkW = scaled(20)
+				local dkX = scaled(238)
 				local sideX = scaled(262)
 
 				local Panel = New("Frame", {
@@ -2018,8 +2053,15 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						return
 					end
 					expanded = not expanded
-					CPRoot:TweenSize(UDim2.fromOffset(elemW(), expanded and (scaled(34) + panH) or scaled(34)), "Out", "Quad", 0.2, true)
-					local _rx, _ry = inputPos(CPHdr); Ripple(CPHdr, Rip, _rx, _ry)
+					CPRoot:TweenSize(
+						UDim2.fromOffset(elemW(), expanded and (scaled(34) + panH) or scaled(34)),
+						"Out",
+						"Quad",
+						0.2,
+						true
+					)
+					local _rx, _ry = inputPos(CPHdr)
+					Ripple(CPHdr, Rip, _rx, _ry)
 					task.wait(0.22)
 					resizeSection()
 				end))
@@ -2050,7 +2092,9 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					DkCur.Position = UDim2.new(0.5, 0, 1 - cs[3], -DkCur.AbsoluteSize.Y / 2)
 				end
 				local function samplePicker(sx, sy)
-					if not cpDrag then return end
+					if not cpDrag then
+						return
+					end
 					local x = math.clamp(sx - Picker.AbsolutePosition.X, 0, Picker.AbsoluteSize.X)
 					local y = math.clamp(sy - Picker.AbsolutePosition.Y, 0, Picker.AbsoluteSize.Y)
 					cs[1] = 1 - x / math.max(1, Picker.AbsoluteSize.X)
@@ -2059,7 +2103,9 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					applyColor()
 				end
 				local function sampleDark(sy)
-					if not dkDrag then return end
+					if not dkDrag then
+						return
+					end
 					local y = math.clamp(sy - DkBar.AbsolutePosition.Y, 0, DkBar.AbsoluteSize.Y)
 					local p = y / math.max(1, DkBar.AbsoluteSize.Y)
 					cs[3] = 1 - p
@@ -2402,7 +2448,9 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	-- Keeps the window proportional if the player resizes the window
 	-- or flips orientation on mobile.
 	Track(Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-		if not Main.Parent or not ALIVE then return end
+		if not Main.Parent or not ALIVE then
+			return
+		end
 		local nw, nh = winW(), winH()
 		Main.Size = UDim2.fromOffset(nw, minimized and hdrH() or nh)
 		Header.Size = UDim2.fromOffset(nw, hdrH())
