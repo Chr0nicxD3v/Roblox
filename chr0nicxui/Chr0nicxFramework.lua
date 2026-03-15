@@ -243,7 +243,8 @@ local function fireThemeListeners()
 	end
 end
 
-function Chr0nicxHack3r:OnThemeChange(fn)
+function Chr0nicxHack3r.OnThemeChange(self, fn)
+	if type(self) == "function" then self, fn = Chr0nicxHack3r, self end
 	assert(type(fn) == "function", "[Chr0nicxFramework] OnThemeChange requires a function")
 	ThemeListeners[fn] = true
 	task.defer(fn)
@@ -252,7 +253,8 @@ end
 -- ─────────────────────────────────────────────────────────────────
 --  PUBLIC THEME API
 -- ─────────────────────────────────────────────────────────────────
-function Chr0nicxHack3r:SetTheme(name)
+function Chr0nicxHack3r.SetTheme(self, name)
+	if type(self) == "string" then self, name = Chr0nicxHack3r, self end
 	if not applyNamedTheme(name) then
 		warn("[Chr0nicxFramework] Unknown theme:", name)
 		return
@@ -260,11 +262,12 @@ function Chr0nicxHack3r:SetTheme(name)
 	fireThemeListeners()
 	if Chr0nicxHack3r.ConfigEnabled then
 		SettingsT.SelectedTheme = name
-		Chr0nicxHack3r:SaveConfig(false)
+		Chr0nicxHack3r.SaveConfig(Chr0nicxHack3r, false)
 	end
 end
 
-function Chr0nicxHack3r:GetThemes()
+function Chr0nicxHack3r.GetThemes(self)
+	-- Works as  :GetThemes()  or  .GetThemes()  (self is ignored)
 	local names = {}
 	for k in pairs(themeStyles) do
 		table.insert(names, k)
@@ -273,7 +276,8 @@ function Chr0nicxHack3r:GetThemes()
 	return names
 end
 
-function Chr0nicxHack3r:AddCustomTheme(name, tbl)
+function Chr0nicxHack3r.AddCustomTheme(self, name, tbl)
+	if type(self) == "string" then self, name, tbl = Chr0nicxHack3r, self, name end
 	assert(
 		type(name) == "string" and type(tbl) == "table",
 		"[Chr0nicxFramework] AddCustomTheme requires (string, table)"
@@ -284,7 +288,8 @@ function Chr0nicxHack3r:AddCustomTheme(name, tbl)
 	themeStyles[name] = tbl
 end
 
-function Chr0nicxHack3r:ChangeColor(prop, color)
+function Chr0nicxHack3r.ChangeColor(self, prop, color)
+	if type(self) == "string" then self, prop, color = Chr0nicxHack3r, self, prop end
 	local valid = { Background = 1, SchemeColor = 1, Header = 1, TextColor = 1, ElementColor = 1 }
 	if not valid[prop] then
 		warn("[Chr0nicxFramework] ChangeColor: unknown property:", prop)
@@ -320,12 +325,9 @@ local function configWriteDebounced()
 	end)
 end
 
-function Chr0nicxHack3r:SaveConfig(immediate)
-	if immediate then
-		configWrite()
-	else
-		configWriteDebounced()
-	end
+function Chr0nicxHack3r.SaveConfig(self, immediate)
+	if type(self) == "boolean" then self, immediate = Chr0nicxHack3r, self end
+	if immediate then configWrite() else configWriteDebounced() end
 end
 
 -- Load config on require
@@ -399,7 +401,8 @@ end
 -- ─────────────────────────────────────────────────────────────────
 --  DRAGGING
 -- ─────────────────────────────────────────────────────────────────
-function Chr0nicxHack3r:DraggingEnabled(handle, target)
+function Chr0nicxHack3r.DraggingEnabled(self, handle, target)
+	if typeof(self) == "Instance" then self, handle, target = Chr0nicxHack3r, self, handle end
 	target = target or handle
 	local dragging, dragInput, startMouse, startPos
 
@@ -436,7 +439,8 @@ end
 -- ─────────────────────────────────────────────────────────────────
 --  SHUTDOWN / TOGGLE
 -- ─────────────────────────────────────────────────────────────────
-function Chr0nicxHack3r:_Shutdown()
+function Chr0nicxHack3r._Shutdown(self)
+	self = (type(self) == "table" and self) or Chr0nicxHack3r
 	if not ALIVE then
 		return
 	end
@@ -461,7 +465,8 @@ function Chr0nicxHack3r:_Shutdown()
 	self._LibName = nil
 end
 
-function Chr0nicxHack3r:ToggleUI()
+function Chr0nicxHack3r.ToggleUI(self)
+	self = (type(self) == "table" and self) or Chr0nicxHack3r
 	if self._ScreenGui then
 		self._ScreenGui.Enabled = not self._ScreenGui.Enabled
 	end
@@ -473,7 +478,11 @@ Chr0nicxHack3r._LibName = LibName
 -- ═════════════════════════════════════════════════════════════════
 --  CREATE LIB
 -- ═════════════════════════════════════════════════════════════════
-function Chr0nicxHack3r:CreateLib(libName, themeArg)
+function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
+	-- Normalize: accept both  UI:CreateLib(name, theme)  and  UI.CreateLib(name, theme)
+	if type(self) == "string" then
+		self, libName, themeArg = Chr0nicxHack3r, self, libName
+	end
 	assert(ALIVE, "[Chr0nicxFramework] Cannot call CreateLib after _Shutdown()")
 	if themeArg and themeStyles[themeArg] then
 		applyNamedTheme(themeArg)
@@ -1074,28 +1083,14 @@ function Chr0nicxHack3r:CreateLib(libName, themeArg)
 				local hover = false
 
 				local Row, Icon = makeRow(Vector2.new(628, 420))
-				Icon.ImageRectOffset = Vector2.new(628, 420)
-				Icon.ImageRectSize = Vector2.new(48, 48)
-				Icon.Image = "rbxassetid://3926309567"
-				local Lbl = makeTextLabel(Row, tName)
+				-- No left-side icon for toggles — hide it so text fills the row cleanly
+				Icon.Visible = false
+				local Lbl = makeTextLabel(Row, tName, 14)
 				local InfoBtn = makeInfoBtn(Row)
 				local Rip = makeRipple(Row)
 				local Tooltip = makeTooltip(tip)
 
-				-- Checked icon
-				local IconOn = New("ImageLabel", {
-					Parent = Row,
-					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 10, 0.5, -10),
-					Size = UDim2.fromOffset(20, 20),
-					Image = "rbxassetid://3926309567",
-					ImageColor3 = activeTheme.SchemeColor,
-					ImageRectOffset = Vector2.new(784, 420),
-					ImageRectSize = Vector2.new(48, 48),
-					ImageTransparency = toggled and 0 or 1,
-				})
-
-				-- Pill indicator
+				-- Pill indicator (right side only)
 				local Pill = New("Frame", {
 					Parent = Row,
 					BackgroundColor3 = toggled and activeTheme.SchemeColor or derived.SliderTrack,
@@ -1113,7 +1108,6 @@ function Chr0nicxHack3r:CreateLib(libName, themeArg)
 
 				local function syncVisual(state, animate)
 					local t = animate ~= false and 0.15 or 0
-					Tween(IconOn, { ImageTransparency = state and 0 or 1 }, t, Enum.EasingStyle.Linear)
 					Tween(Pill, { BackgroundColor3 = state and activeTheme.SchemeColor or derived.SliderTrack }, t)
 					Tween(Dot, { Position = state and UDim2.new(1, -18, 0.5, -6) or UDim2.new(0, 2, 0.5, -6) }, t)
 				end
@@ -1123,8 +1117,6 @@ function Chr0nicxHack3r:CreateLib(libName, themeArg)
 						return
 					end
 					Row.BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor
-					Icon.ImageColor3 = activeTheme.SchemeColor
-					IconOn.ImageColor3 = activeTheme.SchemeColor
 					Lbl.TextColor3 = activeTheme.TextColor
 					Pill.BackgroundColor3 = toggled and activeTheme.SchemeColor or derived.SliderTrack
 					Dot.BackgroundColor3 = activeTheme.TextColor
@@ -2127,7 +2119,12 @@ function Chr0nicxHack3r:CreateLib(libName, themeArg)
         Notify(title, message, duration, type)
         type: "default" | "info" | "success" | "warning" | "error"
     ]]
-	function Chr0nicxHack3r:Notify(titleText, messageText, duration, notifType)
+	function Chr0nicxHack3r.Notify(self, titleText, messageText, duration, notifType)
+		-- Accept both  :Notify(...)  and  .Notify(...)
+		if type(self) == "string" then
+			self, titleText, messageText, duration, notifType =
+				Chr0nicxHack3r, self, titleText, messageText, duration
+		end
 		if not ALIVE then
 			return
 		end
