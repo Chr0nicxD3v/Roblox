@@ -1,6 +1,6 @@
 --[[
 ╔═══════════════════════════════════════════════════════════════════╗
-║              Chr0nicxFramework  ·  v4.0.0                        ║
+║              Chr0nicxFramework  ·  v4.1.0                        ║
 ║              Author : Chr0nicxHack3r                             ║
 ║              Built on KavoUI  (xHeptc/Kavo-UI-Library)          ║
 ╠═══════════════════════════════════════════════════════════════════╣
@@ -35,12 +35,24 @@
 ║    Elements:NewToggle(name, tip, def, cb)  → {UpdateToggle,     ║
 ║                                               ApplySavedState}  ║
 ║    Elements:NewSlider(name,tip,max,min,val,cb) → {SetValue}     ║
-║    Elements:NewTextBox(name,tip,default,cb)                     ║
+║    Elements:NewTextBox(name,tip,default,cb)→ {SetText,GetText}  ║
 ║    Elements:NewDropdown(name,tip,list,cb)  → {Refresh,Select}   ║
 ║    Elements:NewKeybind(name,tip,key,cb)    → {GetKey,SetKey}    ║
 ║    Elements:NewColorPicker(name,tip,col,cb)→ {SetColor,GetColor}║
 ║    Elements:NewLabel(text)                 → {UpdateLabel}      ║
 ║    Elements:NewDivider()                                        ║
+╠═══════════════════════════════════════════════════════════════════╣
+║  PATCH NOTES  v4.1.0                                            ║
+║    FIX 1 · ThemeListeners self-prune via return false           ║
+║    FIX 2 · Slider uses UserInputService.InputChanged,           ║
+║            not deprecated Mouse.Move                            ║
+║    FIX 3 · NewTextBox now returns {SetText, GetText}            ║
+║    FIX 4 · ColorPicker syncCur deferred until AbsoluteSize      ║
+║            is valid (waits for first RenderStepped)             ║
+║    FIX 5 · Config load block guarded so it cannot run           ║
+║            before CreateLib even if ConfigEnabled is set early  ║
+║    FIX 6 · setOpen uses task.spawn to avoid blocking            ║
+║            click-handler coroutine; prevents double-click jank  ║
 ╚═══════════════════════════════════════════════════════════════════╝
 ]]
 
@@ -233,12 +245,18 @@ end
 -- ─────────────────────────────────────────────────────────────────
 --  THEME LISTENER SYSTEM
 -- ─────────────────────────────────────────────────────────────────
+-- FIX 1: Listeners self-prune by returning false.
+-- Any listener that returns false (or errors) is removed immediately.
+-- Every OnThemeChange callback that guards with "if not X.Parent" should
+-- return false in that branch so the entry is cleaned up automatically.
 local function fireThemeListeners()
 	for fn in pairs(ThemeListeners) do
-		local ok, err = pcall(fn)
+		local ok, result = pcall(fn)
 		if not ok then
 			ThemeListeners[fn] = nil
-			warn("[Chr0nicxFramework] Theme listener error (removed):", err)
+			warn("[Chr0nicxFramework] Theme listener error (removed):", result)
+		elseif result == false then
+			ThemeListeners[fn] = nil
 		end
 	end
 end
@@ -250,6 +268,10 @@ function Chr0nicxHack3r.OnThemeChange(self, fn)
 	assert(type(fn) == "function", "[Chr0nicxFramework] OnThemeChange requires a function")
 	ThemeListeners[fn] = true
 	task.defer(fn)
+	-- Returns a disconnect handle so callers can remove a listener early if desired
+	return function()
+		ThemeListeners[fn] = nil
+	end
 end
 
 -- ─────────────────────────────────────────────────────────────────
@@ -271,7 +293,6 @@ function Chr0nicxHack3r.SetTheme(self, name)
 end
 
 function Chr0nicxHack3r.GetThemes(self)
-	-- Works as  :GetThemes()  or  .GetThemes()  (self is ignored)
 	local names = {}
 	for k in pairs(themeStyles) do
 		table.insert(names, k)
@@ -344,8 +365,18 @@ function Chr0nicxHack3r.SaveConfig(self, immediate)
 	end
 end
 
--- Load config on require
-if Chr0nicxHack3r.ConfigEnabled then
+-- FIX 5: Config load is deferred into a function called from CreateLib,
+-- not at module-require time. This prevents any file I/O or theme application
+-- from running before CreateLib is called, even if ConfigEnabled is set early.
+local _configLoaded = false
+local function loadConfigOnce()
+	if _configLoaded then
+		return
+	end
+	_configLoaded = true
+	if not Chr0nicxHack3r.ConfigEnabled then
+		return
+	end
 	pcall(function()
 		local raw = readfile(CONFIG_FILE)
 		if not raw or raw == "" then
@@ -356,9 +387,9 @@ if Chr0nicxHack3r.ConfigEnabled then
 			SettingsT = t
 		end
 	end)
-end
-if SettingsT.SelectedTheme then
-	applyNamedTheme(SettingsT.SelectedTheme)
+	if SettingsT.SelectedTheme then
+		applyNamedTheme(SettingsT.SelectedTheme)
+	end
 end
 
 -- ─────────────────────────────────────────────────────────────────
@@ -495,11 +526,14 @@ Chr0nicxHack3r._LibName = LibName
 --  CREATE LIB
 -- ═════════════════════════════════════════════════════════════════
 function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
-	-- Normalize: accept both  UI:CreateLib(name, theme)  and  UI.CreateLib(name, theme)
 	if type(self) == "string" then
 		self, libName, themeArg = Chr0nicxHack3r, self, libName
 	end
 	assert(ALIVE, "[Chr0nicxFramework] Cannot call CreateLib after _Shutdown()")
+
+	-- FIX 5: Load config here, safely, after CreateLib is called
+	loadConfigOnce()
+
 	if themeArg and themeStyles[themeArg] then
 		applyNamedTheme(themeArg)
 	end
@@ -635,7 +669,6 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 		ZIndex = 50,
 	})
 
-	-- Tooltip bar docked to the bottom of the window
 	local TooltipBar = New("Frame", {
 		Parent = Main,
 		BackgroundTransparency = 1,
@@ -679,9 +712,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	end))
 
 	-- ── Theme wiring (top-level) ───────────────────────────────────
+	-- FIX 1 applied: return false when instance is gone so the listener self-prunes
 	Chr0nicxHack3r:OnThemeChange(function()
 		if not Main.Parent then
-			return
+			return false
 		end
 		Main.BackgroundColor3 = activeTheme.Background
 		Header.BackgroundColor3 = activeTheme.Header
@@ -782,9 +816,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			end
 		end)
 
+		-- FIX 1 applied
 		Chr0nicxHack3r:OnThemeChange(function()
 			if not Page.Parent then
-				return
+				return false
 			end
 			Page.ScrollBarImageColor3 = derived.Scrollbar
 			TabBtn.TextColor3 = activeTheme.TextColor
@@ -826,14 +861,12 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				Thickness = 1,
 				Transparency = 0.7,
 			})
-			-- Left accent bar
 			local SecAccent = New("Frame", {
 				Parent = SecHead,
 				BackgroundColor3 = activeTheme.SchemeColor,
 				BorderSizePixel = 0,
 				Size = UDim2.new(0, 3, 1, 0),
 			})
-
 			local SecNameLbl = New("TextLabel", {
 				Parent = SecHead,
 				BackgroundTransparency = 1,
@@ -866,9 +899,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			Track(InnerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(resizeSection))
 			resizeSection()
 
+			-- FIX 1 applied
 			Chr0nicxHack3r:OnThemeChange(function()
 				if not SecFrame.Parent then
-					return
+					return false
 				end
 				SecFrame.BackgroundColor3 = activeTheme.Background
 				SecHead.BackgroundColor3 = derived.SectionHead
@@ -933,9 +967,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				if ov then
 					tt.TextColor3 = ov
 				end
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
 					if not tt.Parent then
-						return
+						return false
 					end
 					tt.BackgroundColor3 = derived.TooltipBg
 					tt.TextColor3 = activeTheme.TextColor
@@ -969,15 +1004,16 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					ImageRectSize = Vector2.new(36, 36),
 					ImageColor3 = activeTheme.SchemeColor,
 				})
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
-					if b.Parent then
-						b.ImageColor3 = activeTheme.SchemeColor
+					if not b.Parent then
+						return false
 					end
+					b.ImageColor3 = activeTheme.SchemeColor
 				end)
 				return b
 			end
 
-			-- Standard 34px row
 			local function makeRow(iconRectOffset)
 				local row = New("TextButton", {
 					Parent = InnerFrame,
@@ -1038,9 +1074,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local Rip = makeRipple(Row)
 				local Tooltip = makeTooltip(tip)
 
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
 					if not Row.Parent then
-						return
+						return false
 					end
 					Row.BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor
 					Icon.ImageColor3 = activeTheme.SchemeColor
@@ -1084,7 +1121,6 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 
 			-- ── TOGGLE ───────────────────────────────────────────
 			function Elements:NewToggle(tName, tip, default, callback)
-				-- Allow 3-arg form: NewToggle(name, tip, callback)
 				if type(default) == "function" and callback == nil then
 					callback = default
 					default = false
@@ -1099,14 +1135,12 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local hover = false
 
 				local Row, Icon = makeRow(Vector2.new(628, 420))
-				-- No left-side icon for toggles — hide it so text fills the row cleanly
 				Icon.Visible = false
 				local Lbl = makeTextLabel(Row, tName, 14)
 				local InfoBtn = makeInfoBtn(Row)
 				local Rip = makeRipple(Row)
 				local Tooltip = makeTooltip(tip)
 
-				-- Pill indicator (right side only)
 				local Pill = New("Frame", {
 					Parent = Row,
 					BackgroundColor3 = toggled and activeTheme.SchemeColor or derived.SliderTrack,
@@ -1128,9 +1162,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Tween(Dot, { Position = state and UDim2.new(1, -18, 0.5, -6) or UDim2.new(0, 2, 0.5, -6) }, t)
 				end
 
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
 					if not Row.Parent then
-						return
+						return false
 					end
 					Row.BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor
 					Lbl.TextColor3 = activeTheme.TextColor
@@ -1259,9 +1294,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					setVal(startVal, true)
 				end)
 
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
 					if not Row.Parent then
-						return
+						return false
 					end
 					Row.BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor
 					Icon.ImageColor3 = activeTheme.SchemeColor
@@ -1305,21 +1341,27 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						true
 					)
 				end))
-				Track(Mouse.Move:Connect(function()
+
+				-- FIX 2: Use UserInputService.InputChanged instead of deprecated Mouse.Move
+				Track(UserInputService.InputChanged:Connect(function(inp)
 					if not dragging then
+						return
+					end
+					if inp.UserInputType ~= Enum.UserInputType.MouseMovement then
 						return
 					end
 					setVal(
 						minVal
 							+ (maxVal - minVal)
 								* math.clamp(
-									(Mouse.X - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
+									(inp.Position.X - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
 									0,
 									1
 								),
 						true
 					)
 				end))
+
 				Track(UserInputService.InputEnded:Connect(function(inp)
 					if inp.UserInputType == Enum.UserInputType.MouseButton1 and dragging then
 						dragging = false
@@ -1339,12 +1381,14 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			end
 
 			-- ── TEXTBOX ──────────────────────────────────────────
+			-- FIX 3: Now returns a control table with SetText and GetText
 			function Elements:NewTextBox(tbName, tip, default, callback)
 				tbName = tostring(tbName or "TextBox")
 				tip = tostring(tip or "Type and press Enter")
 				default = default ~= nil and tostring(default) or ""
 				callback = type(callback) == "function" and callback or function() end
 
+				local TbFn = {}
 				local hover = false
 				local Row, Icon = makeRow(Vector2.new(324, 604))
 				local Lbl = makeTextLabel(Row, tbName, 38, 152)
@@ -1370,9 +1414,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = TB })
 				New("UIPadding", { Parent = TB, PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) })
 
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
 					if not Row.Parent then
-						return
+						return false
 					end
 					Row.BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor
 					Icon.ImageColor3 = activeTheme.SchemeColor
@@ -1411,7 +1456,16 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					task.spawn(showTooltip, Tooltip)
 				end))
 
+				-- FIX 3: return control table
+				function TbFn:SetText(text)
+					TB.Text = tostring(text ~= nil and text or "")
+				end
+				function TbFn:GetText()
+					return TB.Text
+				end
+
 				resizeSection()
+				return TbFn
 			end
 
 			-- ── DROPDOWN ─────────────────────────────────────────
@@ -1485,9 +1539,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local Rip = makeRipple(DDBtn)
 				local Tooltip = makeTooltip(tip)
 
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
 					if not DDCont.Parent then
-						return
+						return false
 					end
 					DDCont.BackgroundColor3 = activeTheme.Background
 					DDBtn.BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor
@@ -1511,6 +1566,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					return focusing
 				end)
 
+				-- FIX 6: setOpen runs in task.spawn so it never blocks the click-handler
+				-- coroutine, preventing double-click jank from the task.wait inside it
 				local function setOpen(state)
 					opened = state
 					local h = state and DDLayout.AbsoluteContentSize.Y or 34
@@ -1525,7 +1582,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						dismissTooltip()
 						return
 					end
-					setOpen(not opened)
+					task.spawn(setOpen, not opened) -- FIX 6
 					Ripple(DDBtn, Rip, Mouse.X, Mouse.Y)
 				end))
 				Track(InfoBtn.MouseButton1Click:Connect(function()
@@ -1550,11 +1607,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = Opt })
 					local OR = makeRipple(Opt)
 
-					local ao = true
+					-- FIX 1 applied: use ao flag + return false path
 					Chr0nicxHack3r:OnThemeChange(function()
-						if not ao or not Opt.Parent then
-							ao = false
-							return
+						if not Opt.Parent then
+							return false
 						end
 						Opt.BackgroundColor3 = oh and derived.ElementHover or activeTheme.ElementColor
 						Opt.TextColor3 = derived.OptionTextDim
@@ -1577,7 +1633,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						SelLbl.Text = tostring(v)
 						Ripple(Opt, OR, Mouse.X, Mouse.Y)
 						task.spawn(pcall, callback, v)
-						setOpen(false)
+						task.spawn(setOpen, false) -- FIX 6
 					end))
 				end
 
@@ -1655,9 +1711,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Transparency = 0.6,
 				})
 
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
 					if not Row.Parent then
-						return
+						return false
 					end
 					Row.BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor
 					Icon.ImageColor3 = activeTheme.SchemeColor
@@ -1901,9 +1958,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					ZIndex = 4,
 				})
 
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
 					if not CPRoot.Parent then
-						return
+						return false
 					end
 					CPRoot.BackgroundColor3 = activeTheme.Background
 					CPHdr.BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor
@@ -1970,7 +2028,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					task.spawn(pcall, callback, col)
 				end
 				local function syncCur()
-					local cx, cy = PCur.AbsoluteSize.X / 2, PCur.AbsoluteSize.Y / 2
+					local cx = PCur.AbsoluteSize.X / 2
+					local cy = PCur.AbsoluteSize.Y / 2
 					PCur.Position = UDim2.new(1 - cs[1], -cx, 1 - cs[2], -cy)
 					DkCur.Position = UDim2.new(0.5, 0, 1 - cs[3], -DkCur.AbsoluteSize.Y / 2)
 				end
@@ -1997,7 +2056,11 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					applyColor()
 				end
 
-				Track(Mouse.Move:Connect(function()
+				-- FIX 2: Color picker drag also uses UserInputService.InputChanged
+				Track(UserInputService.InputChanged:Connect(function(inp)
+					if inp.UserInputType ~= Enum.UserInputType.MouseMovement then
+						return
+					end
 					samplePicker()
 					sampleDark()
 				end))
@@ -2027,10 +2090,17 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					syncCur()
 					applyColor()
 				end))
-				task.defer(function()
+
+				-- FIX 4: Wait for AbsoluteSize to be valid before placing cursors.
+				-- RenderStepped fires after the first layout pass, guaranteeing
+				-- non-zero AbsoluteSize on Picker and DkBar.
+				local initConn
+				initConn = RunService.RenderStepped:Connect(function()
+					initConn:Disconnect()
 					syncCur()
 					applyColor()
 				end)
+
 				resizeSection()
 
 				function ColFn:SetColor(c3)
@@ -2068,9 +2138,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				if ov then
 					Lbl.TextColor3 = ov
 				end
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
 					if not Lbl.Parent then
-						return
+						return false
 					end
 					Lbl.BackgroundColor3 = activeTheme.SchemeColor
 					Lbl.TextColor3 = activeTheme.TextColor
@@ -2095,10 +2166,12 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Size = UDim2.fromOffset(378, 1),
 				})
 				New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = Div })
+				-- FIX 1 applied
 				Chr0nicxHack3r:OnThemeChange(function()
-					if Div.Parent then
-						Div.BackgroundColor3 = derived.DividerColor
+					if not Div.Parent then
+						return false
 					end
+					Div.BackgroundColor3 = derived.DividerColor
 				end)
 				resizeSection()
 			end
@@ -2132,11 +2205,10 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	})
 
 	--[[
-        Notify(title, message, duration, type)
-        type: "default" | "info" | "success" | "warning" | "error"
-    ]]
+		Notify(title, message, duration, type)
+		type: "default" | "info" | "success" | "warning" | "error"
+	]]
 	function Chr0nicxHack3r.Notify(self, titleText, messageText, duration, notifType)
-		-- Accept both  :Notify(...)  and  .Notify(...)
 		if type(self) == "string" then
 			self, titleText, messageText, duration, notifType = Chr0nicxHack3r, self, titleText, messageText, duration
 		end
@@ -2144,7 +2216,6 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			return
 		end
 
-		-- Prune oldest if at cap
 		local list = {}
 		for _, c in ipairs(NotifHolder:GetChildren()) do
 			if c:IsA("Frame") then
@@ -2177,7 +2248,6 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			accent = derived.NotifError
 		end
 
-		-- Measure text
 		local msr = New("TextLabel", {
 			Parent = ScreenGui,
 			BackgroundTransparency = 1,
@@ -2208,7 +2278,6 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 		})
 		New("UICorner", { CornerRadius = UDim.new(0, 7), Parent = Notif })
 		New("UIStroke", { Parent = Notif, Color = accent, Thickness = 1, Transparency = 0.6 })
-
 		New("Frame", {
 			Name = "Accent",
 			Parent = Notif,
@@ -2269,18 +2338,16 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			})
 		end
 
-		-- Slide in
 		Notif.Position = UDim2.fromOffset(NOTIF_W + 20, 0)
 		Tween(Notif, { Position = UDim2.fromOffset(0, 0), BackgroundTransparency = 0 }, 0.22)
-
-		-- Shrinking progress bar
 		Tween(ProgFill, { Size = UDim2.new(0, 0, 1, 0) }, duration, Enum.EasingStyle.Linear)
 
 		local alive = true
+		-- FIX 1 applied
 		Chr0nicxHack3r:OnThemeChange(function()
 			if not alive or not Notif.Parent then
 				alive = false
-				return
+				return false
 			end
 			Notif.BackgroundColor3 = activeTheme.ElementColor
 			Notif.Accent.BackgroundColor3 = accent
