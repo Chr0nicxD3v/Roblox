@@ -97,67 +97,67 @@ local themeStyles = {
 		ElementColor = Color3.fromRGB(38, 39, 48),
 	},
 	DarkTheme = {
-		SchemeColor = Color3.fromRGB(80, 80, 80),
-		Background = Color3.fromRGB(15, 15, 15),
-		Header = Color3.fromRGB(8, 8, 8),
-		TextColor = Color3.fromRGB(240, 240, 240),
-		ElementColor = Color3.fromRGB(25, 25, 25),
+		SchemeColor = Color3.fromRGB(64, 64, 64),
+		Background = Color3.fromRGB(0, 0, 0),
+		Header = Color3.fromRGB(0, 0, 0),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(20, 20, 20),
 	},
 	LightTheme = {
-		SchemeColor = Color3.fromRGB(100, 120, 180),
-		Background = Color3.fromRGB(245, 245, 250),
-		Header = Color3.fromRGB(210, 210, 220),
-		TextColor = Color3.fromRGB(30, 30, 40),
-		ElementColor = Color3.fromRGB(225, 225, 235),
+		SchemeColor = Color3.fromRGB(150, 150, 150),
+		Background = Color3.fromRGB(255, 255, 255),
+		Header = Color3.fromRGB(200, 200, 200),
+		TextColor = Color3.fromRGB(0, 0, 0),
+		ElementColor = Color3.fromRGB(224, 224, 224),
 	},
 	BloodTheme = {
-		SchemeColor = Color3.fromRGB(200, 30, 30),
-		Background = Color3.fromRGB(12, 10, 10),
-		Header = Color3.fromRGB(6, 5, 5),
-		TextColor = Color3.fromRGB(240, 200, 200),
-		ElementColor = Color3.fromRGB(22, 18, 18),
+		SchemeColor = Color3.fromRGB(227, 27, 27),
+		Background = Color3.fromRGB(10, 10, 10),
+		Header = Color3.fromRGB(5, 5, 5),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(20, 20, 20),
 	},
 	GrapeTheme = {
-		SchemeColor = Color3.fromRGB(155, 70, 210),
-		Background = Color3.fromRGB(55, 42, 65),
-		Header = Color3.fromRGB(32, 24, 40),
-		TextColor = Color3.fromRGB(230, 210, 245),
-		ElementColor = Color3.fromRGB(68, 52, 82),
+		SchemeColor = Color3.fromRGB(166, 71, 214),
+		Background = Color3.fromRGB(64, 50, 71),
+		Header = Color3.fromRGB(36, 28, 41),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(74, 58, 84),
 	},
 	Ocean = {
-		SchemeColor = Color3.fromRGB(70, 130, 240),
-		Background = Color3.fromRGB(18, 26, 52),
-		Header = Color3.fromRGB(12, 18, 38),
-		TextColor = Color3.fromRGB(190, 210, 255),
-		ElementColor = Color3.fromRGB(26, 38, 72),
+		SchemeColor = Color3.fromRGB(86, 76, 251),
+		Background = Color3.fromRGB(26, 32, 58),
+		Header = Color3.fromRGB(38, 45, 71),
+		TextColor = Color3.fromRGB(200, 200, 200),
+		ElementColor = Color3.fromRGB(38, 45, 71),
 	},
 	Midnight = {
-		SchemeColor = Color3.fromRGB(26, 200, 168),
-		Background = Color3.fromRGB(36, 52, 72),
-		Header = Color3.fromRGB(24, 36, 52),
-		TextColor = Color3.fromRGB(210, 240, 235),
-		ElementColor = Color3.fromRGB(44, 64, 88),
+		SchemeColor = Color3.fromRGB(26, 189, 158),
+		Background = Color3.fromRGB(44, 62, 82),
+		Header = Color3.fromRGB(57, 81, 105),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(52, 74, 95),
 	},
 	Sentinel = {
-		SchemeColor = Color3.fromRGB(220, 40, 70),
-		Background = Color3.fromRGB(28, 28, 28),
-		Header = Color3.fromRGB(18, 18, 18),
-		TextColor = Color3.fromRGB(130, 220, 150),
-		ElementColor = Color3.fromRGB(36, 36, 36),
+		SchemeColor = Color3.fromRGB(230, 35, 69),
+		Background = Color3.fromRGB(32, 32, 32),
+		Header = Color3.fromRGB(24, 24, 24),
+		TextColor = Color3.fromRGB(119, 209, 138),
+		ElementColor = Color3.fromRGB(24, 24, 24),
 	},
 	Synapse = {
-		SchemeColor = Color3.fromRGB(180, 130, 60),
-		Background = Color3.fromRGB(14, 16, 13),
-		Header = Color3.fromRGB(8, 10, 7),
-		TextColor = Color3.fromRGB(200, 170, 100),
-		ElementColor = Color3.fromRGB(22, 24, 20),
+		SchemeColor = Color3.fromRGB(46, 48, 43),
+		Background = Color3.fromRGB(13, 15, 12),
+		Header = Color3.fromRGB(36, 38, 35),
+		TextColor = Color3.fromRGB(152, 99, 53),
+		ElementColor = Color3.fromRGB(24, 24, 24),
 	},
 	Serpent = {
-		SchemeColor = Color3.fromRGB(30, 180, 80),
-		Background = Color3.fromRGB(22, 32, 28),
-		Header = Color3.fromRGB(14, 22, 18),
-		TextColor = Color3.fromRGB(200, 240, 210),
-		ElementColor = Color3.fromRGB(28, 44, 36),
+		SchemeColor = Color3.fromRGB(0, 166, 58),
+		Background = Color3.fromRGB(31, 41, 43),
+		Header = Color3.fromRGB(22, 29, 31),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		ElementColor = Color3.fromRGB(22, 29, 31),
 	},
 }
 
@@ -244,7 +244,9 @@ local function fireThemeListeners()
 end
 
 function Chr0nicxHack3r.OnThemeChange(self, fn)
-	if type(self) == "function" then self, fn = Chr0nicxHack3r, self end
+	if type(self) == "function" then
+		self, fn = Chr0nicxHack3r, self
+	end
 	assert(type(fn) == "function", "[Chr0nicxFramework] OnThemeChange requires a function")
 	ThemeListeners[fn] = true
 	task.defer(fn)
@@ -254,7 +256,9 @@ end
 --  PUBLIC THEME API
 -- ─────────────────────────────────────────────────────────────────
 function Chr0nicxHack3r.SetTheme(self, name)
-	if type(self) == "string" then self, name = Chr0nicxHack3r, self end
+	if type(self) == "string" then
+		self, name = Chr0nicxHack3r, self
+	end
 	if not applyNamedTheme(name) then
 		warn("[Chr0nicxFramework] Unknown theme:", name)
 		return
@@ -277,7 +281,9 @@ function Chr0nicxHack3r.GetThemes(self)
 end
 
 function Chr0nicxHack3r.AddCustomTheme(self, name, tbl)
-	if type(self) == "string" then self, name, tbl = Chr0nicxHack3r, self, name end
+	if type(self) == "string" then
+		self, name, tbl = Chr0nicxHack3r, self, name
+	end
 	assert(
 		type(name) == "string" and type(tbl) == "table",
 		"[Chr0nicxFramework] AddCustomTheme requires (string, table)"
@@ -289,7 +295,9 @@ function Chr0nicxHack3r.AddCustomTheme(self, name, tbl)
 end
 
 function Chr0nicxHack3r.ChangeColor(self, prop, color)
-	if type(self) == "string" then self, prop, color = Chr0nicxHack3r, self, prop end
+	if type(self) == "string" then
+		self, prop, color = Chr0nicxHack3r, self, prop
+	end
 	local valid = { Background = 1, SchemeColor = 1, Header = 1, TextColor = 1, ElementColor = 1 }
 	if not valid[prop] then
 		warn("[Chr0nicxFramework] ChangeColor: unknown property:", prop)
@@ -326,8 +334,14 @@ local function configWriteDebounced()
 end
 
 function Chr0nicxHack3r.SaveConfig(self, immediate)
-	if type(self) == "boolean" then self, immediate = Chr0nicxHack3r, self end
-	if immediate then configWrite() else configWriteDebounced() end
+	if type(self) == "boolean" then
+		self, immediate = Chr0nicxHack3r, self
+	end
+	if immediate then
+		configWrite()
+	else
+		configWriteDebounced()
+	end
 end
 
 -- Load config on require
@@ -402,7 +416,9 @@ end
 --  DRAGGING
 -- ─────────────────────────────────────────────────────────────────
 function Chr0nicxHack3r.DraggingEnabled(self, handle, target)
-	if typeof(self) == "Instance" then self, handle, target = Chr0nicxHack3r, self, handle end
+	if typeof(self) == "Instance" then
+		self, handle, target = Chr0nicxHack3r, self, handle
+	end
 	target = target or handle
 	local dragging, dragInput, startMouse, startPos
 
@@ -2122,8 +2138,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	function Chr0nicxHack3r.Notify(self, titleText, messageText, duration, notifType)
 		-- Accept both  :Notify(...)  and  .Notify(...)
 		if type(self) == "string" then
-			self, titleText, messageText, duration, notifType =
-				Chr0nicxHack3r, self, titleText, messageText, duration
+			self, titleText, messageText, duration, notifType = Chr0nicxHack3r, self, titleText, messageText, duration
 		end
 		if not ALIVE then
 			return
