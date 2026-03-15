@@ -56,7 +56,33 @@ local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
+local Camera = workspace.CurrentCamera
 local MakeTweenInfo = TweenInfo.new
+
+-- ─────────────────────────────────────────────────────────────────
+--  RESPONSIVE SCALE
+--  Design target: 560 × 340 at a 1280 × 720 viewport.
+--  Everything is authored at 1× then multiplied by UI_SCALE.
+-- ─────────────────────────────────────────────────────────────────
+local BASE_W, BASE_H = 1280, 720
+local WIN_W, WIN_H = 560, 340 -- authored window size
+local SB_W = 158 -- sidebar width
+local CONTENT_X = 166 -- content area left offset
+local ELEM_W = 378 -- element / section width
+local HDR_H = 32 -- header height
+local SB_H = 308 -- sidebar / content height
+local CONTENT_H = 296 -- scrollable content height
+
+local function getScale()
+	local vp = Camera.ViewportSize
+	-- Clamp: never shrink below 0.45 (tiny phones) or above 1.15 (4K)
+	local s = math.min(vp.X / BASE_W, vp.Y / BASE_H)
+	return math.clamp(s, 0.45, 1.15)
+end
+
+local function scaled(n)
+	return math.round(n * getScale())
+end
 
 -- ─────────────────────────────────────────────────────────────────
 --  MODULE
@@ -397,6 +423,16 @@ local function Ripple(button, template, mx, my)
 	end)
 end
 
+-- Returns the current cursor/touch screen position as x, y.
+-- Falls back to button centre when touch position is unavailable.
+local function inputPos(button)
+	local touches = UserInputService:GetTouchEnabled() and UserInputService:GetTouches()
+	if touches and #touches > 0 then
+		return touches[1].Position.X, touches[1].Position.Y
+	end
+	return Mouse.X, Mouse.Y
+end
+
 local function BindHover(button, onEnter, onLeave, focusingRef)
 	Track(button.MouseEnter:Connect(function()
 		if focusingRef and focusingRef() then
@@ -423,7 +459,8 @@ function Chr0nicxHack3r.DraggingEnabled(self, handle, target)
 	local dragging, dragInput, startMouse, startPos
 
 	Track(handle.InputBegan:Connect(function(inp)
-		if inp.UserInputType ~= Enum.UserInputType.MouseButton1 then
+		local t = inp.UserInputType
+		if t ~= Enum.UserInputType.MouseButton1 and t ~= Enum.UserInputType.Touch then
 			return
 		end
 		dragging = true
@@ -437,7 +474,8 @@ function Chr0nicxHack3r.DraggingEnabled(self, handle, target)
 	end))
 
 	Track(handle.InputChanged:Connect(function(inp)
-		if inp.UserInputType == Enum.UserInputType.MouseMovement then
+		local t = inp.UserInputType
+		if t == Enum.UserInputType.MouseMovement or t == Enum.UserInputType.Touch then
 			dragInput = inp
 		end
 	end))
@@ -515,6 +553,33 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	})
 	Chr0nicxHack3r._ScreenGui = ScreenGui
 
+	-- ── Responsive sizing ─────────────────────────────────────────
+	-- Recalculated whenever the viewport changes (orientation flip, etc.)
+	local function winW()
+		return scaled(WIN_W)
+	end
+	local function winH()
+		return scaled(WIN_H)
+	end
+	local function hdrH()
+		return scaled(HDR_H)
+	end
+	local function sbW()
+		return scaled(SB_W)
+	end
+	local function sbH()
+		return scaled(SB_H)
+	end
+	local function cntX()
+		return scaled(CONTENT_X)
+	end
+	local function cntH()
+		return scaled(CONTENT_H)
+	end
+	local function elemW()
+		return scaled(ELEM_W)
+	end
+
 	-- ── Main window ───────────────────────────────────────────────
 	local Main = New("Frame", {
 		Name = "Main",
@@ -523,7 +588,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 		ClipsDescendants = true,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.fromOffset(560, 340),
+		Size = UDim2.fromOffset(winW(), winH()),
 	})
 	New("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Main })
 	New("UIStroke", {
@@ -538,7 +603,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 		Name = "Header",
 		Parent = Main,
 		BackgroundColor3 = activeTheme.Header,
-		Size = UDim2.fromOffset(560, 32),
+		Size = UDim2.fromOffset(winW(), hdrH()),
 		ZIndex = 2,
 	})
 	New("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Header })
@@ -547,19 +612,19 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 		BackgroundColor3 = activeTheme.Header,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0, 0, 1, -7),
-		Size = UDim2.fromOffset(560, 7),
+		Size = UDim2.fromOffset(winW(), 7),
 	})
 
 	local TitleLabel = New("TextLabel", {
 		Parent = Header,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 12, 0, 0),
-		Size = UDim2.new(1, -70, 1, 0),
+		Position = UDim2.new(0, scaled(12), 0, 0),
+		Size = UDim2.new(1, -scaled(70), 1, 0),
 		Font = Enum.Font.GothamBold,
 		RichText = true,
 		Text = libName,
 		TextColor3 = activeTheme.TextColor,
-		TextSize = 14,
+		TextSize = scaled(14),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 3,
 	})
@@ -567,8 +632,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	local CloseBtn = New("ImageButton", {
 		Parent = Header,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -28, 0.5, -10),
-		Size = UDim2.fromOffset(20, 20),
+		Position = UDim2.new(1, -scaled(28), 0.5, -scaled(10)),
+		Size = UDim2.fromOffset(scaled(20), scaled(20)),
 		Image = "rbxassetid://3926305904",
 		ImageRectOffset = Vector2.new(284, 4),
 		ImageRectSize = Vector2.new(24, 24),
@@ -578,8 +643,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	local MinBtn = New("ImageButton", {
 		Parent = Header,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -52, 0.5, -10),
-		Size = UDim2.fromOffset(20, 20),
+		Position = UDim2.new(1, -scaled(52), 0.5, -scaled(10)),
+		Size = UDim2.fromOffset(scaled(20), scaled(20)),
 		Image = "rbxassetid://3926305904",
 		ImageRectOffset = Vector2.new(284, 124),
 		ImageRectSize = Vector2.new(24, 24),
@@ -592,8 +657,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 		Name = "Sidebar",
 		Parent = Main,
 		BackgroundColor3 = activeTheme.Header,
-		Position = UDim2.new(0, 0, 0, 32),
-		Size = UDim2.fromOffset(158, 308),
+		Position = UDim2.new(0, 0, 0, hdrH()),
+		Size = UDim2.fromOffset(sbW(), sbH()),
 	})
 	New("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Sidebar })
 	local SidebarCover = New("Frame", {
@@ -601,14 +666,14 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 		BackgroundColor3 = activeTheme.Header,
 		BorderSizePixel = 0,
 		Position = UDim2.new(1, -8, 0, 0),
-		Size = UDim2.fromOffset(8, 308),
+		Size = UDim2.fromOffset(8, sbH()),
 	})
 
 	local TabContainer = New("Frame", {
 		Parent = Sidebar,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 8, 0, 8),
-		Size = UDim2.fromOffset(142, 292),
+		Size = UDim2.fromOffset(sbW() - 16, sbH() - 16),
 		ClipsDescendants = true,
 	})
 	New("UIListLayout", {
@@ -621,8 +686,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	local ContentArea = New("Frame", {
 		Parent = Main,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 166, 0, 38),
-		Size = UDim2.fromOffset(386, 296),
+		Position = UDim2.new(0, cntX(), 0, hdrH() + 6),
+		Size = UDim2.fromOffset(winW() - cntX(), cntH()),
 	})
 	local PagesFolder = New("Folder", { Name = "Pages", Parent = ContentArea })
 
@@ -639,8 +704,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	local TooltipBar = New("Frame", {
 		Parent = Main,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 166, 1, -38),
-		Size = UDim2.fromOffset(386, 38),
+		Position = UDim2.new(0, cntX(), 1, -scaled(38)),
+		Size = UDim2.fromOffset(winW() - cntX(), scaled(38)),
 		ClipsDescendants = true,
 		ZIndex = 60,
 	})
@@ -654,7 +719,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 		minimized = not minimized
 		Tween(
 			Main,
-			{ Size = minimized and UDim2.fromOffset(560, 32) or UDim2.fromOffset(560, 340) },
+			{ Size = minimized and UDim2.fromOffset(winW(), hdrH()) or UDim2.fromOffset(winW(), winH()) },
 			0.22,
 			Enum.EasingStyle.Quad
 		)
@@ -712,12 +777,12 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			Parent = TabContainer,
 			BackgroundColor3 = activeTheme.SchemeColor,
 			BackgroundTransparency = firstTab and 0 or 1,
-			Size = UDim2.fromOffset(142, 30),
+			Size = UDim2.fromOffset(sbW() - 16, scaled(30)),
 			AutoButtonColor = false,
 			Font = Enum.Font.Gotham,
 			Text = tabName,
 			TextColor3 = activeTheme.TextColor,
-			TextSize = 13,
+			TextSize = scaled(13),
 			ClipsDescendants = true,
 		})
 		New("UICorner", { CornerRadius = UDim.new(0, 5), Parent = TabBtn })
@@ -804,7 +869,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				Parent = Page,
 				BackgroundColor3 = activeTheme.Background,
 				BorderSizePixel = 0,
-				Size = UDim2.fromOffset(378, 36),
+				Size = UDim2.fromOffset(elemW(), 36),
 			})
 			local SecLayout = New("UIListLayout", {
 				Parent = SecFrame,
@@ -815,7 +880,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			local SecHead = New("Frame", {
 				Parent = SecFrame,
 				BackgroundColor3 = derived.SectionHead,
-				Size = UDim2.fromOffset(378, 30),
+				Size = UDim2.fromOffset(elemW(), scaled(30)),
 				Visible = not hidden,
 				ClipsDescendants = true,
 			})
@@ -837,20 +902,20 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			local SecNameLbl = New("TextLabel", {
 				Parent = SecHead,
 				BackgroundTransparency = 1,
-				Position = UDim2.new(0, 12, 0, 0),
-				Size = UDim2.new(1, -16, 1, 0),
+				Position = UDim2.new(0, scaled(12), 0, 0),
+				Size = UDim2.new(1, -scaled(16), 1, 0),
 				Font = Enum.Font.GothamSemibold,
 				RichText = true,
 				Text = secName,
 				TextColor3 = activeTheme.TextColor,
-				TextSize = 13,
+				TextSize = scaled(13),
 				TextXAlignment = Enum.TextXAlignment.Left,
 			})
 
 			local InnerFrame = New("Frame", {
 				Parent = SecFrame,
 				BackgroundTransparency = 1,
-				Size = UDim2.fromOffset(378, 0),
+				Size = UDim2.fromOffset(elemW(), 0),
 			})
 			local InnerLayout = New("UIListLayout", {
 				Parent = InnerFrame,
@@ -860,7 +925,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 
 			local function resizeSection()
 				InnerFrame.Size = UDim2.new(1, 0, 0, InnerLayout.AbsoluteContentSize.Y)
-				SecFrame.Size = UDim2.new(0, 378, 0, SecLayout.AbsoluteContentSize.Y)
+				SecFrame.Size = UDim2.new(0, elemW(), 0, SecLayout.AbsoluteContentSize.Y)
 				refreshCanvas()
 			end
 			Track(InnerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(resizeSection))
@@ -919,13 +984,13 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Parent = TooltipBar,
 					BackgroundColor3 = derived.TooltipBg,
 					Position = UDim2.new(0, 0, 2, 0),
-					Size = UDim2.fromOffset(386, 32),
+					Size = UDim2.fromOffset(winW() - cntX(), scaled(32)),
 					ZIndex = 65,
 					Font = Enum.Font.GothamSemibold,
 					RichText = true,
 					Text = "  ⓘ  " .. tip,
 					TextColor3 = activeTheme.TextColor,
-					TextSize = 13,
+					TextSize = scaled(13),
 					TextXAlignment = Enum.TextXAlignment.Left,
 				})
 				New("UICorner", { CornerRadius = UDim.new(0, 5), Parent = tt })
@@ -961,8 +1026,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local b = New("ImageButton", {
 					Parent = parent,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(1, -28, 0.5, -11),
-					Size = UDim2.fromOffset(22, 22),
+					Position = UDim2.new(1, -scaled(28), 0.5, -scaled(11)),
+					Size = UDim2.fromOffset(scaled(22), scaled(22)),
 					ZIndex = 10,
 					Image = "rbxassetid://3926305904",
 					ImageRectOffset = Vector2.new(764, 764),
@@ -983,19 +1048,19 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Parent = InnerFrame,
 					BackgroundColor3 = activeTheme.ElementColor,
 					ClipsDescendants = true,
-					Size = UDim2.fromOffset(378, 34),
+					Size = UDim2.fromOffset(elemW(), scaled(34)),
 					AutoButtonColor = false,
 					Font = Enum.Font.SourceSans,
 					Text = "",
-					TextSize = 14,
+					TextSize = scaled(14),
 				})
 				New("UICorner", { CornerRadius = UDim.new(0, 5), Parent = row })
 				local icon = New("ImageLabel", {
 					Name = "Icon",
 					Parent = row,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 10, 0.5, -10),
-					Size = UDim2.fromOffset(20, 20),
+					Position = UDim2.new(0, scaled(10), 0.5, -scaled(10)),
+					Size = UDim2.fromOffset(scaled(20), scaled(20)),
 					Image = "rbxassetid://3926305904",
 					ImageColor3 = activeTheme.SchemeColor,
 					ImageRectOffset = iconRectOffset or Vector2.new(84, 204),
@@ -1008,13 +1073,13 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				return New("TextLabel", {
 					Parent = parent,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, xpos or 38, 0.5, -8),
-					Size = UDim2.fromOffset(width or 200, 16),
+					Position = UDim2.new(0, xpos or scaled(38), 0.5, -scaled(8)),
+					Size = UDim2.fromOffset(width or scaled(200), scaled(16)),
 					Font = Enum.Font.GothamSemibold,
 					RichText = true,
 					Text = tostring(text),
 					TextColor3 = activeTheme.TextColor,
-					TextSize = 13,
+					TextSize = scaled(13),
 					TextXAlignment = Enum.TextXAlignment.Left,
 				})
 			end
@@ -1067,7 +1132,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						return
 					end
 					Tween(Row, { BackgroundColor3 = hover and derived.ElementHover or activeTheme.ElementColor }, 0.12)
-					Ripple(Row, Rip, Mouse.X, Mouse.Y)
+					local _rx, _ry = inputPos(Row)
+					Ripple(Row, Rip, _rx, _ry)
 					task.spawn(pcall, callback)
 				end))
 				Track(InfoBtn.MouseButton1Click:Connect(function()
@@ -1101,7 +1167,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local Row, Icon = makeRow(Vector2.new(628, 420))
 				-- No left-side icon for toggles — hide it so text fills the row cleanly
 				Icon.Visible = false
-				local Lbl = makeTextLabel(Row, tName, 14)
+				local Lbl = makeTextLabel(Row, tName, scaled(14))
 				local InfoBtn = makeInfoBtn(Row)
 				local Rip = makeRipple(Row)
 				local Tooltip = makeTooltip(tip)
@@ -1110,22 +1176,30 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local Pill = New("Frame", {
 					Parent = Row,
 					BackgroundColor3 = toggled and activeTheme.SchemeColor or derived.SliderTrack,
-					Position = UDim2.new(1, -58, 0.5, -8),
-					Size = UDim2.fromOffset(36, 16),
+					Position = UDim2.new(1, -scaled(58), 0.5, -scaled(8)),
+					Size = UDim2.fromOffset(scaled(36), scaled(16)),
 				})
 				New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = Pill })
 				local Dot = New("Frame", {
 					Parent = Pill,
 					BackgroundColor3 = activeTheme.TextColor,
-					Position = toggled and UDim2.new(1, -18, 0.5, -6) or UDim2.new(0, 2, 0.5, -6),
-					Size = UDim2.fromOffset(12, 12),
+					Position = toggled and UDim2.new(1, -scaled(18), 0.5, -scaled(6))
+						or UDim2.new(0, scaled(2), 0.5, -scaled(6)),
+					Size = UDim2.fromOffset(scaled(12), scaled(12)),
 				})
 				New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = Dot })
 
 				local function syncVisual(state, animate)
 					local t = animate ~= false and 0.15 or 0
 					Tween(Pill, { BackgroundColor3 = state and activeTheme.SchemeColor or derived.SliderTrack }, t)
-					Tween(Dot, { Position = state and UDim2.new(1, -18, 0.5, -6) or UDim2.new(0, 2, 0.5, -6) }, t)
+					Tween(
+						Dot,
+						{
+							Position = state and UDim2.new(1, -scaled(18), 0.5, -scaled(6))
+								or UDim2.new(0, scaled(2), 0.5, -scaled(6)),
+						},
+						t
+					)
 				end
 
 				Chr0nicxHack3r:OnThemeChange(function()
@@ -1156,7 +1230,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					end
 					toggled = not toggled
 					syncVisual(toggled)
-					Ripple(Row, Rip, Mouse.X, Mouse.Y)
+					local _rx, _ry = inputPos(Row)
+					Ripple(Row, Rip, _rx, _ry)
 					SettingsT[tName] = toggled
 					if Chr0nicxHack3r.OnConfigChanged then
 						pcall(Chr0nicxHack3r.OnConfigChanged, tName, toggled, SettingsT)
@@ -1204,8 +1279,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local curVal = startVal
 
 				local Row, Icon = makeRow(Vector2.new(404, 164))
-				local Lbl = makeTextLabel(Row, sName, 38, 130)
-				local ValLbl = makeTextLabel(Row, tostring(curVal), 176, 56)
+				local Lbl = makeTextLabel(Row, sName, scaled(38), scaled(130))
+				local ValLbl = makeTextLabel(Row, tostring(curVal), scaled(176), scaled(56))
 				ValLbl.TextXAlignment = Enum.TextXAlignment.Right
 				ValLbl.TextColor3 = derived.OptionTextDim
 				local InfoBtn = makeInfoBtn(Row)
@@ -1216,15 +1291,15 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Parent = Row,
 					BackgroundColor3 = derived.SliderTrack,
 					BorderSizePixel = 0,
-					Position = UDim2.new(0, 240, 0.5, -3),
-					Size = UDim2.fromOffset(100, 6),
+					Position = UDim2.new(0, scaled(240), 0.5, -scaled(3)),
+					Size = UDim2.fromOffset(scaled(100), scaled(6)),
 				})
 				New("UICorner", { Parent = TrackBg })
 				local Fill = New("Frame", {
 					Parent = TrackBg,
 					BackgroundColor3 = activeTheme.SchemeColor,
 					BorderSizePixel = 0,
-					Size = UDim2.fromOffset(0, 6),
+					Size = UDim2.fromOffset(0, scaled(6)),
 				})
 				New("UICorner", { Parent = Fill })
 				local Thumb = New("Frame", {
@@ -1232,7 +1307,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					BackgroundColor3 = activeTheme.TextColor,
 					Position = UDim2.new(0, 0, 0.5, 0),
-					Size = UDim2.fromOffset(10, 10),
+					Size = UDim2.fromOffset(scaled(10), scaled(10)),
 					ZIndex = 5,
 				})
 				New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = Thumb })
@@ -1248,7 +1323,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					curVal = v
 					local pct = (v - minVal) / math.max(1, maxVal - minVal)
 					local tw = TrackBg.AbsoluteSize.X
-					Fill.Size = UDim2.fromOffset(math.floor(tw * pct), 6)
+					Fill.Size = UDim2.fromOffset(math.floor(tw * pct), scaled(6))
 					Thumb.Position = UDim2.new(0, math.floor(tw * pct), 0.5, 0)
 					ValLbl.Text = tostring(v)
 					if fire then
@@ -1287,43 +1362,65 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					return focusing
 				end)
 
-				Track(Row.MouseButton1Down:Connect(function()
+				-- Shared logic: begin a slider drag from a screen X position
+				local function beginSliderDrag(screenX, screenY)
 					if focusing then
 						return
 					end
 					dragging = true
-					Tween(Thumb, { Size = UDim2.fromOffset(13, 13) }, 0.1)
-					Ripple(Row, Rip, Mouse.X, Mouse.Y)
+					Tween(Thumb, { Size = UDim2.fromOffset(scaled(13), scaled(13)) }, 0.1)
+					Ripple(Row, Rip, screenX, screenY)
 					setVal(
 						minVal
 							+ (maxVal - minVal)
 								* math.clamp(
-									(Mouse.X - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
+									(screenX - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
 									0,
 									1
 								),
 						true
 					)
+				end
+
+				Track(Row.InputBegan:Connect(function(inp)
+					local t = inp.UserInputType
+					if t == Enum.UserInputType.MouseButton1 then
+						beginSliderDrag(Mouse.X, Mouse.Y)
+					elseif t == Enum.UserInputType.Touch then
+						beginSliderDrag(inp.Position.X, inp.Position.Y)
+					end
 				end))
-				Track(Mouse.Move:Connect(function()
+
+				Track(UserInputService.InputChanged:Connect(function(inp)
 					if not dragging then
 						return
 					end
-					setVal(
-						minVal
-							+ (maxVal - minVal)
-								* math.clamp(
-									(Mouse.X - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
-									0,
-									1
-								),
-						true
-					)
+					local t = inp.UserInputType
+					local sx
+					if t == Enum.UserInputType.MouseMovement then
+						sx = Mouse.X
+					elseif t == Enum.UserInputType.Touch then
+						sx = inp.Position.X
+					end
+					if sx then
+						setVal(
+							minVal
+								+ (maxVal - minVal)
+									* math.clamp(
+										(sx - TrackBg.AbsolutePosition.X) / math.max(1, TrackBg.AbsoluteSize.X),
+										0,
+										1
+									),
+							true
+						)
+					end
 				end))
+
 				Track(UserInputService.InputEnded:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseButton1 and dragging then
+					local t = inp.UserInputType
+					if (t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch) and dragging then
 						dragging = false
-						Tween(Thumb, { Size = UDim2.fromOffset(10, 10) }, 0.1)
+						Tween(Thumb, { Size = UDim2.fromOffset(scaled(10), scaled(10)) }, 0.1)
 					end
 				end))
 				Track(InfoBtn.MouseButton1Click:Connect(function()
@@ -1347,7 +1444,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 
 				local hover = false
 				local Row, Icon = makeRow(Vector2.new(324, 604))
-				local Lbl = makeTextLabel(Row, tbName, 38, 152)
+				local Lbl = makeTextLabel(Row, tbName, scaled(38), scaled(152))
 				local InfoBtn = makeInfoBtn(Row)
 				local Tooltip = makeTooltip(tip)
 
@@ -1356,8 +1453,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					BackgroundColor3 = derived.InputBg,
 					BorderSizePixel = 0,
 					ClipsDescendants = true,
-					Position = UDim2.new(0, 200, 0.5, -10),
-					Size = UDim2.fromOffset(144, 20),
+					Position = UDim2.new(0, scaled(200), 0.5, -scaled(10)),
+					Size = UDim2.fromOffset(scaled(144), scaled(20)),
 					ZIndex = 5,
 					ClearTextOnFocus = false,
 					Font = Enum.Font.Gotham,
@@ -1365,7 +1462,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					PlaceholderText = "Enter value…",
 					Text = default,
 					TextColor3 = activeTheme.TextColor,
-					TextSize = 12,
+					TextSize = scaled(12),
 				})
 				New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = TB })
 				New("UIPadding", { Parent = TB, PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) })
@@ -1429,7 +1526,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Parent = InnerFrame,
 					BackgroundColor3 = activeTheme.Background,
 					BorderSizePixel = 0,
-					Size = UDim2.fromOffset(378, 34),
+					Size = UDim2.fromOffset(elemW(), scaled(34)),
 					ClipsDescendants = true,
 				})
 				local DDLayout = New("UIListLayout", {
@@ -1440,42 +1537,42 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local DDBtn = New("TextButton", {
 					Parent = DDCont,
 					BackgroundColor3 = activeTheme.ElementColor,
-					Size = UDim2.fromOffset(378, 34),
+					Size = UDim2.fromOffset(elemW(), scaled(34)),
 					AutoButtonColor = false,
 					ClipsDescendants = true,
 					Font = Enum.Font.SourceSans,
 					Text = "",
-					TextSize = 14,
+					TextSize = scaled(14),
 				})
 				New("UICorner", { CornerRadius = UDim.new(0, 5), Parent = DDBtn })
 				New("ImageLabel", {
 					Parent = DDBtn,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 10, 0.5, -10),
-					Size = UDim2.fromOffset(20, 20),
+					Position = UDim2.new(0, scaled(10), 0.5, -scaled(10)),
+					Size = UDim2.fromOffset(scaled(20), scaled(20)),
 					Image = "rbxassetid://3926305904",
 					ImageColor3 = activeTheme.SchemeColor,
 					ImageRectOffset = Vector2.new(644, 364),
 					ImageRectSize = Vector2.new(36, 36),
 				})
-				local DDLbl = makeTextLabel(DDBtn, ddName, 38, 190)
+				local DDLbl = makeTextLabel(DDBtn, ddName, scaled(38), scaled(190))
 
 				local SelLbl = New("TextLabel", {
 					Parent = DDBtn,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 236, 0.5, -8),
-					Size = UDim2.fromOffset(110, 16),
+					Position = UDim2.new(0, scaled(236), 0.5, -scaled(8)),
+					Size = UDim2.fromOffset(scaled(110), scaled(16)),
 					Font = Enum.Font.GothamSemibold,
 					Text = "Select…",
 					TextColor3 = derived.OptionTextDim,
-					TextSize = 12,
+					TextSize = scaled(12),
 					TextXAlignment = Enum.TextXAlignment.Right,
 				})
 				local Chevron = New("ImageLabel", {
 					Parent = DDBtn,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(1, -26, 0.5, -8),
-					Size = UDim2.fromOffset(16, 16),
+					Position = UDim2.new(1, -scaled(26), 0.5, -scaled(8)),
+					Size = UDim2.fromOffset(scaled(16), scaled(16)),
 					Image = "rbxassetid://3926305904",
 					ImageRectOffset = Vector2.new(964, 164),
 					ImageRectSize = Vector2.new(36, 36),
@@ -1513,8 +1610,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 
 				local function setOpen(state)
 					opened = state
-					local h = state and DDLayout.AbsoluteContentSize.Y or 34
-					DDCont:TweenSize(UDim2.fromOffset(378, h), "Out", "Quad", 0.2, true)
+					local h = state and DDLayout.AbsoluteContentSize.Y or scaled(34)
+					DDCont:TweenSize(UDim2.fromOffset(elemW(), h), "Out", "Quad", 0.2, true)
 					Tween(Chevron, { Rotation = state and 180 or 0 }, 0.2)
 					task.wait(0.22)
 					resizeSection()
@@ -1526,7 +1623,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						return
 					end
 					setOpen(not opened)
-					Ripple(DDBtn, Rip, Mouse.X, Mouse.Y)
+					local _rx, _ry = inputPos(DDBtn)
+					Ripple(DDBtn, Rip, _rx, _ry)
 				end))
 				Track(InfoBtn.MouseButton1Click:Connect(function()
 					task.spawn(showTooltip, Tooltip)
@@ -1538,13 +1636,13 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						Name = "Opt__" .. tostring(v),
 						Parent = DDCont,
 						BackgroundColor3 = activeTheme.ElementColor,
-						Size = UDim2.fromOffset(378, 30),
+						Size = UDim2.fromOffset(elemW(), scaled(30)),
 						AutoButtonColor = false,
 						ClipsDescendants = true,
 						Font = Enum.Font.GothamSemibold,
 						Text = "    " .. tostring(v),
 						TextColor3 = derived.OptionTextDim,
-						TextSize = 13,
+						TextSize = scaled(13),
 						TextXAlignment = Enum.TextXAlignment.Left,
 					})
 					New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = Opt })
@@ -1575,7 +1673,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 							return
 						end
 						SelLbl.Text = tostring(v)
-						Ripple(Opt, OR, Mouse.X, Mouse.Y)
+						local _rx, _ry = inputPos(Opt)
+						Ripple(Opt, OR, _rx, _ry)
 						task.spawn(pcall, callback, v)
 						setOpen(false)
 					end))
@@ -1597,7 +1696,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						buildOption(v)
 					end
 					DDCont:TweenSize(
-						UDim2.fromOffset(378, opened and DDLayout.AbsoluteContentSize.Y or 34),
+						UDim2.fromOffset(elemW(), opened and DDLayout.AbsoluteContentSize.Y or scaled(34)),
 						"Out",
 						"Quad",
 						0.2,
@@ -1630,7 +1729,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local hover = false
 
 				local Row, Icon = makeRow(Vector2.new(364, 284))
-				local Lbl = makeTextLabel(Row, kbName, 38, 192)
+				local Lbl = makeTextLabel(Row, kbName, scaled(38), scaled(192))
 				local InfoBtn = makeInfoBtn(Row)
 				local Rip = makeRipple(Row)
 				local Tooltip = makeTooltip(tip)
@@ -1638,12 +1737,12 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local KeyTag = New("TextLabel", {
 					Parent = Row,
 					BackgroundColor3 = derived.SectionHead,
-					Position = UDim2.new(1, -92, 0.5, -9),
-					Size = UDim2.fromOffset(62, 18),
+					Position = UDim2.new(1, -scaled(92), 0.5, -scaled(9)),
+					Size = UDim2.fromOffset(scaled(62), scaled(18)),
 					Font = Enum.Font.GothamSemibold,
 					Text = curKey.Name,
 					TextColor3 = activeTheme.SchemeColor,
-					TextSize = 12,
+					TextSize = scaled(12),
 					TextXAlignment = Enum.TextXAlignment.Center,
 					ZIndex = 3,
 				})
@@ -1692,7 +1791,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					end
 					waiting = true
 					KeyTag.Text = ". . ."
-					Ripple(Row, Rip, Mouse.X, Mouse.Y)
+					local _rx, _ry = inputPos(Row)
+					Ripple(Row, Rip, _rx, _ry)
 					local conn
 					conn = Track(UserInputService.InputBegan:Connect(function(inp)
 						if not waiting then
@@ -1752,7 +1852,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Parent = InnerFrame,
 					BackgroundColor3 = activeTheme.Background,
 					BorderSizePixel = 0,
-					Size = UDim2.fromOffset(378, 34),
+					Size = UDim2.fromOffset(elemW(), scaled(34)),
 					ClipsDescendants = true,
 				})
 				New("UIListLayout", { Parent = CPRoot, SortOrder = Enum.SortOrder.LayoutOrder })
@@ -1760,25 +1860,25 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local CPHdr = New("TextButton", {
 					Parent = CPRoot,
 					BackgroundColor3 = activeTheme.ElementColor,
-					Size = UDim2.fromOffset(378, 34),
+					Size = UDim2.fromOffset(elemW(), scaled(34)),
 					AutoButtonColor = false,
 					ClipsDescendants = true,
 					Font = Enum.Font.SourceSans,
 					Text = "",
-					TextSize = 14,
+					TextSize = scaled(14),
 				})
 				New("UICorner", { CornerRadius = UDim.new(0, 5), Parent = CPHdr })
 				New("ImageLabel", {
 					Parent = CPHdr,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 10, 0.5, -10),
-					Size = UDim2.fromOffset(20, 20),
+					Position = UDim2.new(0, scaled(10), 0.5, -scaled(10)),
+					Size = UDim2.fromOffset(scaled(20), scaled(20)),
 					Image = "rbxassetid://3926305904",
 					ImageColor3 = activeTheme.SchemeColor,
 					ImageRectOffset = Vector2.new(44, 964),
 					ImageRectSize = Vector2.new(36, 36),
 				})
-				makeTextLabel(CPHdr, cpName, 38, 210)
+				makeTextLabel(CPHdr, cpName, scaled(38), scaled(210))
 				local InfoBtn = makeInfoBtn(CPHdr)
 				local Rip = makeRipple(CPHdr)
 				local Tooltip = makeTooltip(tip)
@@ -1786,8 +1886,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local Swatch = New("Frame", {
 					Parent = CPHdr,
 					BackgroundColor3 = defColor,
-					Position = UDim2.new(1, -90, 0.5, -9),
-					Size = UDim2.fromOffset(40, 18),
+					Position = UDim2.new(1, -scaled(90), 0.5, -scaled(9)),
+					Size = UDim2.fromOffset(scaled(40), scaled(18)),
 					ZIndex = 3,
 				})
 				New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = Swatch })
@@ -1796,10 +1896,20 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					{ Parent = Swatch, Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Transparency = 0.7 }
 				)
 
+				-- Panel proportions: picker = 59% of width, darkbar = ~5%, rainbow side = ~31%
+				-- Authored at 378px: Picker=222 @ x=8, DkBar=20 @ x=238, side @ x=262
+				local panH = scaled(112)
+				local picW = scaled(222)
+				local picX = scaled(8)
+				local picH = scaled(88)
+				local dkW = scaled(20)
+				local dkX = scaled(238)
+				local sideX = scaled(262)
+
 				local Panel = New("Frame", {
 					Parent = CPRoot,
 					BackgroundColor3 = activeTheme.ElementColor,
-					Size = UDim2.fromOffset(378, 112),
+					Size = UDim2.fromOffset(elemW(), panH),
 					ClipsDescendants = false,
 				})
 				New("UICorner", { CornerRadius = UDim.new(0, 5), Parent = Panel })
@@ -1807,8 +1917,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local Picker = New("ImageButton", {
 					Parent = Panel,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 8, 0.5, -44),
-					Size = UDim2.fromOffset(222, 88),
+					Position = UDim2.new(0, picX, 0.5, -picH / 2),
+					Size = UDim2.fromOffset(picW, picH),
 					Image = "rbxassetid://6523286724",
 					ZIndex = 4,
 				})
@@ -1816,7 +1926,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local PCur = New("ImageLabel", {
 					Parent = Picker,
 					BackgroundTransparency = 1,
-					Size = UDim2.fromOffset(14, 14),
+					Size = UDim2.fromOffset(scaled(14), scaled(14)),
 					Image = "rbxassetid://3926309567",
 					ImageColor3 = Color3.fromRGB(0, 0, 0),
 					ImageRectOffset = Vector2.new(628, 420),
@@ -1827,8 +1937,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local DkBar = New("ImageButton", {
 					Parent = Panel,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 238, 0.5, -44),
-					Size = UDim2.fromOffset(20, 88),
+					Position = UDim2.new(0, dkX, 0.5, -picH / 2),
+					Size = UDim2.fromOffset(dkW, picH),
 					Image = "rbxassetid://6523291212",
 					ZIndex = 4,
 				})
@@ -1837,7 +1947,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Parent = DkBar,
 					AnchorPoint = Vector2.new(0.5, 0),
 					BackgroundTransparency = 1,
-					Size = UDim2.fromOffset(14, 14),
+					Size = UDim2.fromOffset(scaled(14), scaled(14)),
 					Image = "rbxassetid://3926309567",
 					ImageColor3 = Color3.fromRGB(0, 0, 0),
 					ImageRectOffset = Vector2.new(628, 420),
@@ -1848,8 +1958,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				New("ImageLabel", {
 					Parent = Panel,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 268, 0.5, -26),
-					Size = UDim2.fromOffset(20, 20),
+					Position = UDim2.new(0, sideX, 0.5, -scaled(26)),
+					Size = UDim2.fromOffset(scaled(20), scaled(20)),
 					Image = "rbxassetid://3926309567",
 					ImageColor3 = activeTheme.SchemeColor,
 					ImageRectOffset = Vector2.new(628, 420),
@@ -1859,8 +1969,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				local RbwOn = New("ImageLabel", {
 					Parent = Panel,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 268, 0.5, -26),
-					Size = UDim2.fromOffset(20, 20),
+					Position = UDim2.new(0, sideX, 0.5, -scaled(26)),
+					Size = UDim2.fromOffset(scaled(20), scaled(20)),
 					Image = "rbxassetid://3926309567",
 					ImageColor3 = activeTheme.SchemeColor,
 					ImageRectOffset = Vector2.new(784, 420),
@@ -1871,32 +1981,32 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				New("TextLabel", {
 					Parent = Panel,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 262, 0.5, -4),
-					Size = UDim2.fromOffset(60, 14),
+					Position = UDim2.new(0, sideX - scaled(4), 0.5, -scaled(4)),
+					Size = UDim2.fromOffset(scaled(60), scaled(14)),
 					Font = Enum.Font.Gotham,
 					Text = "Rainbow",
 					TextColor3 = activeTheme.TextColor,
-					TextSize = 11,
+					TextSize = scaled(11),
 					TextXAlignment = Enum.TextXAlignment.Left,
 					ZIndex = 4,
 				})
 				local RbwBtn = New("TextButton", {
 					Parent = Panel,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 258, 0.5, -30),
-					Size = UDim2.fromOffset(116, 50),
+					Position = UDim2.new(0, sideX - scaled(8), 0.5, -scaled(30)),
+					Size = UDim2.fromOffset(scaled(116), scaled(50)),
 					Text = "",
 					ZIndex = 6,
 				})
 				local HexLbl = New("TextLabel", {
 					Parent = Panel,
 					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 262, 0.5, 14),
-					Size = UDim2.fromOffset(112, 14),
+					Position = UDim2.new(0, sideX - scaled(4), 0.5, scaled(14)),
+					Size = UDim2.fromOffset(scaled(112), scaled(14)),
 					Font = Enum.Font.GothamSemibold,
 					Text = "#FFFFFF",
 					TextColor3 = derived.OptionTextDim,
-					TextSize = 11,
+					TextSize = scaled(11),
 					TextXAlignment = Enum.TextXAlignment.Center,
 					ZIndex = 4,
 				})
@@ -1943,8 +2053,15 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						return
 					end
 					expanded = not expanded
-					CPRoot:TweenSize(UDim2.fromOffset(378, expanded and 146 or 34), "Out", "Quad", 0.2, true)
-					Ripple(CPHdr, Rip, Mouse.X, Mouse.Y)
+					CPRoot:TweenSize(
+						UDim2.fromOffset(elemW(), expanded and (scaled(34) + panH) or scaled(34)),
+						"Out",
+						"Quad",
+						0.2,
+						true
+					)
+					local _rx, _ry = inputPos(CPHdr)
+					Ripple(CPHdr, Rip, _rx, _ry)
 					task.wait(0.22)
 					resizeSection()
 				end))
@@ -1974,22 +2091,22 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					PCur.Position = UDim2.new(1 - cs[1], -cx, 1 - cs[2], -cy)
 					DkCur.Position = UDim2.new(0.5, 0, 1 - cs[3], -DkCur.AbsoluteSize.Y / 2)
 				end
-				local function samplePicker()
+				local function samplePicker(sx, sy)
 					if not cpDrag then
 						return
 					end
-					local x = math.clamp(Mouse.X - Picker.AbsolutePosition.X, 0, Picker.AbsoluteSize.X)
-					local y = math.clamp(Mouse.Y - Picker.AbsolutePosition.Y, 0, Picker.AbsoluteSize.Y)
+					local x = math.clamp(sx - Picker.AbsolutePosition.X, 0, Picker.AbsoluteSize.X)
+					local y = math.clamp(sy - Picker.AbsolutePosition.Y, 0, Picker.AbsoluteSize.Y)
 					cs[1] = 1 - x / math.max(1, Picker.AbsoluteSize.X)
 					cs[2] = 1 - y / math.max(1, Picker.AbsoluteSize.Y)
 					PCur.Position = UDim2.new(0, x - PCur.AbsoluteSize.X / 2, 0, y - PCur.AbsoluteSize.Y / 2)
 					applyColor()
 				end
-				local function sampleDark()
+				local function sampleDark(sy)
 					if not dkDrag then
 						return
 					end
-					local y = math.clamp(Mouse.Y - DkBar.AbsolutePosition.Y, 0, DkBar.AbsoluteSize.Y)
+					local y = math.clamp(sy - DkBar.AbsolutePosition.Y, 0, DkBar.AbsoluteSize.Y)
 					local p = y / math.max(1, DkBar.AbsoluteSize.Y)
 					cs[3] = 1 - p
 					DkCur.Position = UDim2.new(0.5, 0, 0, y - DkCur.AbsoluteSize.Y / 2)
@@ -1997,18 +2114,35 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					applyColor()
 				end
 
-				Track(Mouse.Move:Connect(function()
-					samplePicker()
-					sampleDark()
+				Track(UserInputService.InputChanged:Connect(function(inp)
+					local t = inp.UserInputType
+					local sx, sy
+					if t == Enum.UserInputType.MouseMovement then
+						sx, sy = Mouse.X, Mouse.Y
+					elseif t == Enum.UserInputType.Touch then
+						sx, sy = inp.Position.X, inp.Position.Y
+					end
+					if sx then
+						samplePicker(sx, sy)
+						sampleDark(sy)
+					end
 				end))
-				Track(Picker.MouseButton1Down:Connect(function()
-					cpDrag = true
+
+				Track(Picker.InputBegan:Connect(function(inp)
+					local t = inp.UserInputType
+					if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+						cpDrag = true
+					end
 				end))
-				Track(DkBar.MouseButton1Down:Connect(function()
-					dkDrag = true
+				Track(DkBar.InputBegan:Connect(function(inp)
+					local t = inp.UserInputType
+					if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+						dkDrag = true
+					end
 				end))
 				Track(UserInputService.InputEnded:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+					local t = inp.UserInputType
+					if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
 						cpDrag = false
 						dkDrag = false
 					end
@@ -2055,12 +2189,12 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					BackgroundColor3 = activeTheme.SchemeColor,
 					BorderSizePixel = 0,
 					ClipsDescendants = true,
-					Size = UDim2.fromOffset(378, 28),
+					Size = UDim2.fromOffset(elemW(), scaled(28)),
 					Font = Enum.Font.GothamSemibold,
 					RichText = true,
 					Text = "  " .. text,
 					TextColor3 = activeTheme.TextColor,
-					TextSize = 13,
+					TextSize = scaled(13),
 					TextXAlignment = Enum.TextXAlignment.Left,
 				})
 				New("UICorner", { CornerRadius = UDim.new(0, 5), Parent = Lbl })
@@ -2092,7 +2226,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					Parent = InnerFrame,
 					BackgroundColor3 = derived.DividerColor,
 					BorderSizePixel = 0,
-					Size = UDim2.fromOffset(378, 1),
+					Size = UDim2.fromOffset(elemW(), 1),
 				})
 				New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = Div })
 				Chr0nicxHack3r:OnThemeChange(function()
@@ -2111,8 +2245,8 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	-- ═════════════════════════════════════════════════════════════
 	--  NOTIFICATION SYSTEM
 	-- ═════════════════════════════════════════════════════════════
-	local NOTIF_W = 330
-	local NOTIF_PAD = 10
+	local NOTIF_W = scaled(330)
+	local NOTIF_PAD = scaled(10)
 	local MAX_NOTIFS = 6
 
 	local NotifHolder = New("Frame", {
@@ -2184,13 +2318,13 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			TextWrapped = true,
 			RichText = true,
 			Size = UDim2.fromOffset(NOTIF_W - NOTIF_PAD * 2 - 6, 800),
-			TextSize = 13,
+			TextSize = scaled(13),
 			Font = Enum.Font.GothamBold,
 			Text = titleText,
 		})
 		local tH = msr.TextBounds.Y
 		msr.Font = Enum.Font.Gotham
-		msr.TextSize = 12
+		msr.TextSize = scaled(12)
 		msr.Text = messageText
 		local mH = messageText ~= "" and msr.TextBounds.Y or 0
 		msr:Destroy()
@@ -2241,7 +2375,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 			TextWrapped = true,
 			RichText = true,
 			Font = Enum.Font.GothamBold,
-			TextSize = 13,
+			TextSize = scaled(13),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextYAlignment = Enum.TextYAlignment.Top,
 			TextColor3 = activeTheme.TextColor,
@@ -2258,7 +2392,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 				TextWrapped = true,
 				RichText = true,
 				Font = Enum.Font.Gotham,
-				TextSize = 12,
+				TextSize = scaled(12),
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextYAlignment = Enum.TextYAlignment.Top,
 				TextColor3 = derived.OptionTextDim,
@@ -2308,7 +2442,27 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 	-- ── Open animation ────────────────────────────────────────────
 	Main.Size = UDim2.fromOffset(0, 0)
 	Main.Position = UDim2.new(0.5, 0, 0.5, 0)
-	Tween(Main, { Size = UDim2.fromOffset(560, 340) }, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	Tween(Main, { Size = UDim2.fromOffset(winW(), winH()) }, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+	-- ── Viewport resize listener ──────────────────────────────────
+	-- Keeps the window proportional if the player resizes the window
+	-- or flips orientation on mobile.
+	Track(Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+		if not Main.Parent or not ALIVE then
+			return
+		end
+		local nw, nh = winW(), winH()
+		Main.Size = UDim2.fromOffset(nw, minimized and hdrH() or nh)
+		Header.Size = UDim2.fromOffset(nw, hdrH())
+		HeaderCover.Size = UDim2.fromOffset(nw, 7)
+		Sidebar.Size = UDim2.fromOffset(sbW(), sbH())
+		SidebarCover.Size = UDim2.fromOffset(8, sbH())
+		TabContainer.Size = UDim2.fromOffset(sbW() - 16, sbH() - 16)
+		ContentArea.Position = UDim2.new(0, cntX(), 0, hdrH() + 6)
+		ContentArea.Size = UDim2.fromOffset(nw - cntX(), cntH())
+		TooltipBar.Position = UDim2.new(0, cntX(), 1, -scaled(38))
+		TooltipBar.Size = UDim2.fromOffset(nw - cntX(), scaled(38))
+	end))
 
 	return Tabs
 end -- CreateLib
