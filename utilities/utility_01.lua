@@ -1,7 +1,14 @@
-﻿--Remote spy
+--Remote spy
 local G2L = {};
 
 getgenv().Code = ""
+
+-- Every connection the spy makes, so closing it can undo all of them
+local spyConnections = {}
+local function track(conn)
+	table.insert(spyConnections, conn)
+	return conn
+end
 
 local activityFilter = {
     ["RE/SyncProfile"] = true,
@@ -24,7 +31,7 @@ local UserInputService = game:GetService("UserInputService")
 local guiVisible = true
 local holdingShift = false
 
-UserInputService.InputBegan:Connect(function(input, gp)
+track(UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
 
 	if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift then
@@ -35,13 +42,13 @@ UserInputService.InputBegan:Connect(function(input, gp)
 		guiVisible = not guiVisible
 		G2L["1"].Enabled = guiVisible
 	end
-end)
+end))
 
-UserInputService.InputEnded:Connect(function(input)
+track(UserInputService.InputEnded:Connect(function(input)
 	if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift then
 		holdingShift = false
 	end
-end)
+end))
 
 -- StarterGui.Remote Spy.Frame
 G2L["2"] = Instance.new("Frame", G2L["1"]);
@@ -290,7 +297,6 @@ G2L["11"]["Text"] = [[]];
 print("Made by Danechka")
 print("Modified by Chr0nicxHack3r")
 print("https://rscripts.net/@danechka")
-game:GetService("TextChatService"):WaitForChild("TextChannels"):WaitForChild("RBXGeneral"):SendAsync("I lost the game.")
 
 -- StarterGui.Remote Spy.Frame.Drag
 G2L["12"] = Instance.new("LocalScript", G2L["2"]);
@@ -300,218 +306,336 @@ G2L["12"]["Name"] = [[Drag]];
 G2L["13"] = Instance.new("LocalScript", G2L["2"]);
 G2L["13"]["Name"] = [[Main]];
 
+-- Detached copy of the list-entry template, so "Clear Output" can remove the
+-- placeholder entry without breaking the clones made for later events.
+local entryTemplate = G2L["e"]:Clone()
+
+local selectedRemotePath = nil
+local hookedCallbacks = {} -- [RemoteFunction] = { original = fn, wrapper = fn }
+local spyClosed = false
+
+local function shutdownSpy()
+	if spyClosed then
+		return
+	end
+	spyClosed = true
+	for _, conn in ipairs(spyConnections) do
+		conn:Disconnect()
+	end
+	table.clear(spyConnections)
+	-- Hand each RemoteFunction back to the game's own handler, unless the game
+	-- has assigned a newer one since we hooked it.
+	for remote, hook in pairs(hookedCallbacks) do
+		pcall(function()
+			if getcallbackvalue(remote, "OnClientInvoke") == hook.wrapper then
+				remote.OnClientInvoke = hook.original
+			end
+		end)
+	end
+	table.clear(hookedCallbacks)
+	G2L["1"]:Destroy()
+end
+
 -- StarterGui.Remote Spy.Frame.Drag
 local function C_12()
 local script = G2L["12"];
 	local frame = script.Parent
 	local dragArea = frame.TopBar
 	local UserInputService = game:GetService("UserInputService")
-	
+
 	local dragging
 	local dragInput
 	local dragStart
 	local startPos
-	
+
 	local function update(input)
 		local delta = input.Position - dragStart
 		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 	end
-	
-	dragArea.InputBegan:Connect(function(input)
+
+	track(dragArea.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			dragStart = input.Position
 			startPos = frame.Position
-	
-			input.Changed:Connect(function()
+
+			-- One listener per drag, released when the drag ends
+			local endConn
+			endConn = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
+					endConn:Disconnect()
 				end
 			end)
 		end
-	end)
-	
-	dragArea.InputChanged:Connect(function(input)
+	end))
+
+	track(dragArea.InputChanged:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			dragInput = input
 		end
-	end)
-	
-	UserInputService.InputChanged:Connect(function(input)
+	end))
+
+	track(UserInputService.InputChanged:Connect(function(input)
 		if input == dragInput and dragging then
 			update(input)
 		end
-	end)
-	
+	end))
+
 end;
 task.spawn(C_12);
 -- StarterGui.Remote Spy.Frame.Main
 local function C_13()
 local script = G2L["13"];
 	local TweenService = game:GetService("TweenService")
-	
+
 	local MainFrame = script.Parent
 	local TopBar = MainFrame.TopBar
-	
-	local function Close()
-		
-		MainFrame.Parent:Destroy()
-		
-	end
-	
+
 	local function SetupButtons()
-		
+
 		TopBar.X.MouseEnter:Connect(function()
 			TweenService:Create(TopBar.X, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(170, 0, 0)}):Play()
 		end)
-		
+
 		TopBar.X.MouseLeave:Connect(function()
 			TweenService:Create(TopBar.X, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(37, 35, 38)}):Play()
 		end)
-		
-		TopBar.X.MouseButton1Click:Connect(function()
-			Close()
-		end)
+
+		TopBar.X.MouseButton1Click:Connect(shutdownSpy)
 
 		MainFrame.Buttons.Clear.MouseButton1Click:Connect(function()
-			
+
 			for _,v in pairs(MainFrame.Remotes:GetChildren()) do
 				if v:IsA("TextButton") then
 					v:Destroy()
 				end
 			end
-			
+
 		end)
-		
+
+		MainFrame.Buttons.CopyR.MouseButton1Click:Connect(function()
+			if not selectedRemotePath then
+				print("[Remote Spy] Select a remote first")
+				return
+			end
+			if setclipboard then
+				setclipboard(selectedRemotePath)
+			else
+				print("Your executer doesn't support clipboard")
+			end
+		end)
+
+		MainFrame.Buttons.Run.MouseButton1Click:Connect(function()
+			local code = getgenv().Code
+			if code == "" then
+				print("[Remote Spy] Select a remote first")
+				return
+			end
+			local chunk, compileErr = loadstring(code)
+			if not chunk then
+				warn("[Remote Spy] Code failed to compile:", compileErr)
+				return
+			end
+			local ok, runErr = pcall(chunk)
+			if not ok then
+				warn("[Remote Spy] Code errored:", runErr)
+			end
+		end)
+
 	end
-	
-	local function Init()
-		
-		-- Close Function
-		
-		SetupButtons()
-		
-	end
-	
-	Init()
+
+	SetupButtons()
 end;
 task.spawn(C_13);
 
-local function getPathToInstance(instance)
-    local path = {}
-    local current = instance
-    while current and current ~= game do
-        local name = current.Name
-        if name:sub(1, 4) == "Game" then
-            name = "game" .. name:sub(5)
-        end
-        table.insert(path, 1, name)
-        current = current.Parent
-    end
-    return table.concat(path, ".")
+-- ── Code generation ──────────────────────────────────────────────
+local LUA_KEYWORDS = {
+	["and"] = true, ["break"] = true, ["do"] = true, ["else"] = true, ["elseif"] = true,
+	["end"] = true, ["false"] = true, ["for"] = true, ["function"] = true, ["if"] = true,
+	["in"] = true, ["local"] = true, ["nil"] = true, ["not"] = true, ["or"] = true,
+	["repeat"] = true, ["return"] = true, ["then"] = true, ["true"] = true, ["until"] = true,
+	["while"] = true, ["continue"] = true,
+}
+
+local function isIdentifier(name)
+	return type(name) == "string" and name:match("^[%a_][%w_]*$") ~= nil and not LUA_KEYWORDS[name]
 end
 
-local function formatValue(value)
-    if typeof(value) == "string" then
-        return string.format("%q", value)
-    elseif typeof(value) == "number" then
-        return tostring(value)
-    elseif typeof(value) == "boolean" then
-        return value and "true" or "false"
-    elseif typeof(value) == "Instance" then
-        return getPathToInstance(value)
-    else
-        return string.format("%q", tostring(value))
-    end
+-- Runnable path: game:GetService("ReplicatedStorage").Remotes["Some Remote"]
+local function instancePath(instance)
+	local segments = {}
+	local current = instance
+	while current and current ~= game do
+		local parent = current.Parent
+		if parent == game then
+			table.insert(segments, 1, string.format("game:GetService(%q)", current.ClassName))
+			return table.concat(segments)
+		end
+		local name = current.Name
+		table.insert(segments, 1, isIdentifier(name) and ("." .. name) or string.format("[%q]", name))
+		current = parent
+	end
+	if current == game then
+		return "game" .. table.concat(segments)
+	end
+	return string.format("nil --[[ %s is not in the game tree ]]", instance:GetFullName())
 end
 
-local function Format(args)
-    local formattedArgs = {}
-    for i, arg in ipairs(args) do
-        formattedArgs[i] = string.format("[%d] = %s", i, formatValue(arg))
-    end
-    return formattedArgs
+local MAX_DEPTH = 6
+
+local function serialize(value, depth, seen)
+	local kind = typeof(value)
+	if kind == "string" then
+		return string.format("%q", value)
+	elseif kind == "number" then
+		if value ~= value then
+			return "0/0"
+		elseif value == math.huge then
+			return "math.huge"
+		elseif value == -math.huge then
+			return "-math.huge"
+		end
+		return tostring(value)
+	elseif kind == "boolean" or kind == "nil" then
+		return tostring(value)
+	elseif kind == "Instance" then
+		return instancePath(value)
+	elseif kind == "EnumItem" then
+		return tostring(value)
+	elseif kind == "Vector3" then
+		return string.format("Vector3.new(%s, %s, %s)", value.X, value.Y, value.Z)
+	elseif kind == "Vector2" then
+		return string.format("Vector2.new(%s, %s)", value.X, value.Y)
+	elseif kind == "CFrame" then
+		return "CFrame.new(" .. table.concat({ value:GetComponents() }, ", ") .. ")"
+	elseif kind == "Color3" then
+		return string.format("Color3.new(%s, %s, %s)", value.R, value.G, value.B)
+	elseif kind == "UDim2" then
+		return string.format("UDim2.new(%s, %s, %s, %s)", value.X.Scale, value.X.Offset, value.Y.Scale, value.Y.Offset)
+	elseif kind == "table" then
+		seen = seen or {}
+		depth = depth or 0
+		if seen[value] then
+			return '"<cycle>"'
+		end
+		if depth >= MAX_DEPTH then
+			return '"<max depth>"'
+		end
+		seen[value] = true
+		local parts = {}
+		local n = #value
+		for i = 1, n do
+			parts[#parts + 1] = serialize(value[i], depth + 1, seen)
+		end
+		for k, v in pairs(value) do
+			local isArrayIndex = type(k) == "number" and k >= 1 and k <= n and k % 1 == 0
+			if not isArrayIndex then
+				local key = isIdentifier(k) and k or ("[" .. serialize(k, depth + 1, seen) .. "]")
+				parts[#parts + 1] = key .. " = " .. serialize(v, depth + 1, seen)
+			end
+		end
+		seen[value] = nil
+		return "{" .. table.concat(parts, ", ") .. "}"
+	end
+	-- Anything without a constructor form is emitted as a readable string
+	return string.format("%q", tostring(value))
 end
+
+local function buildCode(args, path, method)
+	local lines = {}
+	for i = 1, args.n do
+		lines[i] = string.format("[%d] = %s", i, serialize(args[i]))
+	end
+	return string.format(
+		"local args = {\n    %s\n}\n%s:%s(table.unpack(args, 1, %d))",
+		table.concat(lines, ",\n    "),
+		path,
+		method,
+		args.n
+	)
+end
+
+local function addEntry(remote, code, path)
+	if spyClosed then
+		return
+	end
+	local entry = entryTemplate:Clone()
+	entry.Name = remote.Name
+	entry.Text = remote.Name
+	entry.Parent = G2L["d"]
+	entry.MouseButton1Click:Connect(function()
+		getgenv().Code = code
+		selectedRemotePath = path
+		G2L["11"].Text = code
+	end)
+end
+
+-- ── Hooks ────────────────────────────────────────────────────────
+local hooked = {}
+local notifiedNoCallbackApi = false
 
 local function handleRemote(remote)
-	if isFiltered(remote) then
-        return
-    end
-    local path = {}
-    local current = remote
-    while current and current.Parent ~= game do
-        local name = current.Name
-        if name:sub(1, 4) == "Game" then
-            name = "game" .. name:sub(5)
-        end
-        table.insert(path, 1, name)
-        current = current.Parent
-    end
-    local fullPath = table.concat(path, ".")
+	if hooked[remote] or isFiltered(remote) then
+		return
+	end
+	hooked[remote] = true
 
-    if remote:IsA("RemoteEvent") then
-        remote.OnClientEvent:Connect(function(...)
-            local args = {...}
-            local argsFormatted = Format(args)
-            local argsString = table.concat(argsFormatted, ",\n    ")
+	if remote:IsA("RemoteEvent") then
+		track(remote.OnClientEvent:Connect(function(...)
+			local path = instancePath(remote)
+			addEntry(remote, buildCode(table.pack(...), path, "FireServer"), path)
+		end))
+	elseif remote:IsA("RemoteFunction") then
+		-- Assigning OnClientInvoke replaces the game's own handler, so only hook
+		-- when the executor can read that handler back for us to chain to.
+		if type(getcallbackvalue) ~= "function" then
+			if not notifiedNoCallbackApi then
+				notifiedNoCallbackApi = true
+				print("[Remote Spy] RemoteFunction logging needs getcallbackvalue; skipped so the game's handlers keep working")
+			end
+			return
+		end
+		local ok, original = pcall(getcallbackvalue, remote, "OnClientInvoke")
+		if not ok or type(original) ~= "function" then
+			return -- no client handler to observe
+		end
+		local function wrapper(...)
+			local path = instancePath(remote)
+			addEntry(remote, buildCode(table.pack(...), path, "InvokeServer"), path)
+			return original(...)
+		end
+		hookedCallbacks[remote] = { original = original, wrapper = wrapper }
+		remote.OnClientInvoke = wrapper
+	end
+end
 
-            G2L["yu"] = G2L["e"]:Clone()
-            G2L["yu"]["Name"] = remote.Name
-            G2L["yu"]["Text"] = remote.Name
-            G2L["yu"]["Parent"] = G2L["d"]
-            G2L["yu"].MouseButton1Click:Connect(function()
-
-				getgenv().Code = string.format("local args = {\n    %s\n}\n%s:FireServer(unpack(args))", argsString, fullPath)
-
-                G2L["11"]["Text"] = getgenv().Code
-            end)
-		end)
-    elseif remote:IsA("RemoteFunction") then
-        remote.OnClientInvoke = function(...)
-            local args = {...}
-            local argsFormatted = Format(args)
-            local argsString = table.concat(argsFormatted, ",\n    ")
-
-            G2L["yu2"] = G2L["e"]:Clone()
-            G2L["yu2"]["Name"] = remote.Name
-            G2L["yu2"]["Text"] = remote.Name
-            G2L["yu2"]["Parent"] = G2L["d"]
-            G2L["yu2"].MouseButton1Click:Connect(function()
-                getgenv().Code = string.format("local args = {\n    %s\n}\n%s:InvokeServer(unpack(args))", argsString, fullPath)
-            end)
-            
-            return ...
-        end
-    end
+local function isRemote(obj)
+	return obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")
 end
 
 local function wrapRemotes(folder)
-    for _, obj in ipairs(folder:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            handleRemote(obj)
-        end
-    end
-    folder.DescendantAdded:Connect(function(descendant)
-        if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
-            handleRemote(descendant)
-        end
-    end)
+	for _, obj in ipairs(folder:GetDescendants()) do
+		if isRemote(obj) then
+			handleRemote(obj)
+		end
+	end
+	track(folder.DescendantAdded:Connect(function(descendant)
+		if isRemote(descendant) then
+			handleRemote(descendant)
+		end
+	end))
 end
 
 local folders = {
-    game.ReplicatedStorage,
-    game.StarterGui,
-    game.StarterPack,
-    game.StarterPlayer
+	game:GetService("ReplicatedStorage"),
+	game:GetService("StarterGui"),
+	game:GetService("StarterPack"),
+	game:GetService("StarterPlayer"),
 }
 
 for _, folder in ipairs(folders) do
-    wrapRemotes(folder)
-    folder.DescendantAdded:Connect(function(descendant)
-        if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
-            handleRemote(descendant)
-        end
-    end)
+	wrapRemotes(folder)
 end
 
 return G2L["1"], require;

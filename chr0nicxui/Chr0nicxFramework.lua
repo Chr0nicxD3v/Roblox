@@ -102,7 +102,7 @@ local CONFIG_VER = 4
 local CONFIG_FILE = "Chr0nicxFramework_v4.json"
 local SAVE_DEBOUNCE = 0.3
 
-local Connections = {}
+local Connections = {} -- set: [RBXScriptConnection] = true
 local ThemeListeners = {}
 local SettingsT = {}
 local pendingSave = false
@@ -249,20 +249,14 @@ applyNamedTheme("Default")
 -- ─────────────────────────────────────────────────────────────────
 local function Track(conn)
 	if conn then
-		table.insert(Connections, conn)
+		Connections[conn] = true
 	end
 	return conn
 end
 
 local function Untrack(conn)
-	if not conn then
-		return
-	end
-	for i = #Connections, 1, -1 do
-		if Connections[i] == conn then
-			table.remove(Connections, i)
-			break
-		end
+	if conn then
+		Connections[conn] = nil
 	end
 end
 
@@ -456,18 +450,19 @@ local function Ripple(button, template, mx, my)
 end
 
 local function BindHover(button, onEnter, onLeave, focusingRef)
-	Track(button.MouseEnter:Connect(function()
+	local enterConn = Track(button.MouseEnter:Connect(function()
 		if focusingRef and focusingRef() then
 			return
 		end
 		onEnter()
 	end))
-	Track(button.MouseLeave:Connect(function()
+	local leaveConn = Track(button.MouseLeave:Connect(function()
 		if focusingRef and focusingRef() then
 			return
 		end
 		onLeave()
 	end))
+	return enterConn, leaveConn
 end
 
 -- ─────────────────────────────────────────────────────────────────
@@ -487,9 +482,13 @@ function Chr0nicxHack3r.DraggingEnabled(self, handle, target)
 		dragging = true
 		startMouse = inp.Position
 		startPos = target.Position
-		Track(inp.Changed:Connect(function()
+		-- One listener per drag, released when the drag ends.
+		local endConn
+		endConn = Track(inp.Changed:Connect(function()
 			if inp.UserInputState == Enum.UserInputState.End then
 				dragging = false
+				endConn:Disconnect()
+				Untrack(endConn)
 			end
 		end))
 	end))
@@ -519,7 +518,7 @@ function Chr0nicxHack3r._Shutdown(self)
 		return
 	end
 	ALIVE = false
-	for _, c in ipairs(Connections) do
+	for c in pairs(Connections) do
 		pcall(function()
 			c:Disconnect()
 		end)
@@ -1610,6 +1609,9 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					task.spawn(showTooltip, Tooltip)
 				end))
 
+				-- [Opt] = its connections, so Refresh can release them with the button
+				local optionConns = {}
+
 				local function buildOption(v)
 					local oh = false
 					local Opt = New("TextButton", {
@@ -1636,7 +1638,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						Opt.TextColor3 = derived.OptionTextDim
 						OR.ImageColor3 = activeTheme.SchemeColor
 					end)
-					BindHover(Opt, function()
+					local enterConn, leaveConn = BindHover(Opt, function()
 						oh = true
 						Tween(Opt, { BackgroundColor3 = derived.ElementHover }, 0.1)
 					end, function()
@@ -1645,7 +1647,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 					end, function()
 						return focusing
 					end)
-					Track(Opt.MouseButton1Click:Connect(function()
+					local clickConn = Track(Opt.MouseButton1Click:Connect(function()
 						if focusing then
 							dismissTooltip()
 							return
@@ -1655,6 +1657,7 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						task.spawn(pcall, callback, v)
 						task.spawn(setOpen, false)
 					end))
+					optionConns[Opt] = { enterConn, leaveConn, clickConn }
 				end
 
 				for _, v in ipairs(list) do
@@ -1669,6 +1672,14 @@ function Chr0nicxHack3r.CreateLib(self, libName, themeArg)
 						newList = type(newList) == "table" and newList or {}
 						for _, c in ipairs(DDCont:GetChildren()) do
 							if tostring(c.Name):sub(1, 5) == "Opt__" then
+								local conns = optionConns[c]
+								if conns then
+									for _, conn in ipairs(conns) do
+										conn:Disconnect()
+										Untrack(conn)
+									end
+									optionConns[c] = nil
+								end
 								c:Destroy()
 							end
 						end
